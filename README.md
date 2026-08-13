@@ -37,6 +37,10 @@ Two jobs:
        to see the bare garment mesh; objects fall back to a raw MMB mesh view.
    - **Chunks** — the chunk list with names, decoded types, and sizes.
    - **Hex** — a raw hex/ASCII dump.
+   - **Music** — pick a track under Library → **Music** and it plays in the bottom bar (play/pause,
+     stop, scrubber, volume). Reads `<install>/soundN/win/music/data/musicNNN.bgw`. Early expansions
+     (`sound`/`sound2`/`sound3`, PS-ADPCM) play; Aht Urhgan and later are ATRAC3 and can't be decoded
+     (same limitation as the original Altana Viewer) — those report as unplayable.
 
 All decoding comes from **Vellichor** — its pure-C# decoders and posed-character build are vendored
 under `Vendor/` (see `Vendor/README.md`); Vellichor stays the source of truth.
@@ -67,7 +71,8 @@ race/slot, so it renders worn.
   set the UI scale. The install path and scale are saved to `user://settings.cfg`. On first run with
   no valid install, Settings opens automatically. Startup order: `$DATVIEWER_ROOT` → saved setting →
   the bundled `../Vellichor/corpus` (dev only) → onboarding.
-- **Open .DAT…** — open any file, including user-made mod DATs (no file id needed).
+- **Open .DAT…** — open any file, including user-made mod DATs (no file id needed). Remembers the
+  last folder you browsed (saved to `user://settings.cfg`) and reopens there next time.
 - **Library** tab — browse by name (PC/NPC/Effect/…); search filters the current list.
 - **ROM Tree** tab — raw folder browsing + the **file id** jump box.
 

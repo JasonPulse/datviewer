@@ -22,8 +22,9 @@ public partial class Main : Control
     private string _root = "";
     private readonly Dictionary<string, int> _pathToId = new(StringComparer.OrdinalIgnoreCase);
 
-    // persisted settings (user://settings.cfg): the FFXI install root + UI scale
+    // persisted settings (user://settings.cfg): the FFXI install root + UI scale + last browse dir
     private string _savedRoot = "";
+    private string _lastOpenDir = "";
     private float _uiScale = 1.5f;
     private Control? _settingsOverlay;
     private Label? _settingsStatus;
@@ -64,6 +65,15 @@ public partial class Main : Control
     private RichTextLabel _chunkText = null!;
     private RichTextLabel _hexText = null!;
     private Label _modelInfo = null!;
+
+    // music player (bottom bar) — FFXI .bgw playback
+    private AudioStreamPlayer _audio = null!;
+    private PanelContainer _musicBar = null!;
+    private Label _musicNow = null!, _musicTime = null!;
+    private Button _musicPlayBtn = null!;
+    private HSlider _musicSeek = null!;
+    private double _musicLenSec;
+    private bool _musicSeekProgrammatic;
 
     // 3d preview
     private SubViewport _viewport = null!;
@@ -116,6 +126,9 @@ public partial class Main : Control
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_SETTINGS") is not null)
             Callable.From(() => OpenSettings(firstRun: false)).CallDeferred();
 
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_BGWSELFTEST") is not null)
+            Callable.From(BgwSelfTest).CallDeferred();
+
         // Headless check of the Library select→resolve→load path (DATVIEWER_LIBTEST=cat/group/slot).
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_LIBTEST") is { } lt)
             Callable.From(() => LibTest(lt)).CallDeferred();
@@ -152,8 +165,14 @@ public partial class Main : Control
             pad.AddThemeConstantOverride(m, 10);
         AddChild(pad);
 
-        var split = new HSplitContainer { SplitOffset = 360 };
-        pad.AddChild(split);
+        var outer = new VBoxContainer();
+        outer.AddThemeConstantOverride("separation", 8);
+        pad.AddChild(outer);
+
+        var split = new HSplitContainer { SplitOffset = 360, SizeFlagsVertical = SizeFlags.ExpandFill };
+        outer.AddChild(split);
+
+        BuildMusicBar(outer); // bottom "now playing" bar for FFXI music
 
         // ---- left: browsers ----
         var left = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) };
@@ -294,6 +313,167 @@ public partial class Main : Control
         world.AddChild(_modelRoot);
     }
 
+    // ---- music player (FFXI .bgw) ----------------------------------------------------------
+
+    private void BuildMusicBar(Control host)
+    {
+        _audio = new AudioStreamPlayer();
+        AddChild(_audio);
+        _audio.Finished += () => _musicPlayBtn.Text = "▶";
+
+        _musicBar = new PanelContainer { Visible = false };
+        host.AddChild(_musicBar);
+        var pad = new MarginContainer();
+        foreach (var m in new[] { "margin_left", "margin_right", "margin_top", "margin_bottom" })
+            pad.AddThemeConstantOverride(m, 8);
+        _musicBar.AddChild(pad);
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 10);
+        pad.AddChild(row);
+
+        _musicPlayBtn = new Button { Text = "▶", CustomMinimumSize = new Vector2(44, 0) };
+        _musicPlayBtn.Pressed += ToggleMusic;
+        row.AddChild(_musicPlayBtn);
+        var stopBtn = new Button { Text = "■" };
+        stopBtn.Pressed += () => { _audio.Stop(); _musicPlayBtn.Text = "▶"; };
+        row.AddChild(stopBtn);
+
+        _musicNow = new Label { Text = "", CustomMinimumSize = new Vector2(220, 0), ClipText = true };
+        _musicNow.AddThemeColorOverride("font_color", UiTheme.Gold);
+        row.AddChild(_musicNow);
+
+        _musicSeek = new HSlider { MinValue = 0, MaxValue = 1, Step = 0.0005, SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _musicSeek.ValueChanged += v =>
+        {
+            if (_musicSeekProgrammatic || _audio.Stream is null) return;
+            _audio.Seek((float)(v * _musicLenSec)); // user dragged the scrubber
+        };
+        row.AddChild(_musicSeek);
+
+        _musicTime = new Label { Text = "0:00 / 0:00", CustomMinimumSize = new Vector2(92, 0) };
+        _musicTime.AddThemeColorOverride("font_color", UiTheme.Muted);
+        row.AddChild(_musicTime);
+
+        row.AddChild(new Label { Text = "🔊" });
+        var vol = new HSlider { MinValue = 0, MaxValue = 1, Step = 0.01, Value = 0.8, CustomMinimumSize = new Vector2(90, 0), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        vol.ValueChanged += v => _audio.VolumeDb = v <= 0.001 ? -80f : Mathf.LinearToDb((float)v);
+        _audio.VolumeDb = Mathf.LinearToDb(0.8f);
+        row.AddChild(vol);
+    }
+
+    private void ToggleMusic()
+    {
+        if (_audio.Stream is null) return;
+        if (!_audio.Playing) _audio.Play();
+        else _audio.StreamPaused = !_audio.StreamPaused;
+        _musicPlayBtn.Text = _audio.Playing && !_audio.StreamPaused ? "❚❚" : "▶";
+    }
+
+    private void PlayMusic(string name, BgwAudio a)
+    {
+        var wav = new AudioStreamWav
+        {
+            Format = AudioStreamWav.FormatEnum.Format16Bits,
+            MixRate = a.SampleRate,
+            Stereo = a.Channels == 2,
+            Data = a.Pcm,
+        };
+        if (a.LoopStartSample >= 0)
+        {
+            wav.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
+            wav.LoopBegin = a.LoopStartSample;
+            wav.LoopEnd = a.SampleCount;
+        }
+        _audio.Stream = wav;
+        _audio.StreamPaused = false;
+        _musicLenSec = a.Seconds;
+        _audio.Play();
+        _musicBar.Visible = true;
+        _musicNow.Text = "♪ " + name;
+        _musicPlayBtn.Text = "❚❚";
+        _musicTime.Text = $"0:00 / {FmtTime(_musicLenSec)}";
+    }
+
+    /// Play a Library "Music" entry. Its ref is a bare track number (e.g. "034"); the file lives at
+    /// <c>&lt;install&gt;/&lt;soundN&gt;/win/music/data/music&lt;id&gt;.bgw</c>.
+    private void PlayMusicEntry(LibEntry e)
+    {
+        string folder = MusicFolder();
+        string id = e.RefToken.Trim();
+        string path = Path.Combine(_root, folder, "win", "music", "data", $"music{id}.bgw");
+        _info.Clear();
+        if (string.IsNullOrEmpty(_root) || !File.Exists(path))
+        {
+            Flash($"'{e.Label}': no music file at {folder}/win/music/data/music{id}.bgw under your FFXI install");
+            return;
+        }
+        byte[] data;
+        try { data = File.ReadAllBytes(path); }
+        catch (Exception ex) { Flash("read failed: " + ex.Message); return; }
+
+        var r = BgwDecoder.TryDecode(data, out var audio);
+        _info.AppendText($"[b][color=#8fd0ff]{Path.GetFileName(path)}[/color][/b]   [color=#aaa]({FormatBytes(data.Length)})[/color]\n");
+        _info.AppendText($"[color=#e8c877]music:[/color] [b]{e.Label}[/b]   ·   {folder}\n");
+        switch (r)
+        {
+            case BgwDecoder.Result.Ok:
+                PlayMusic(e.Label, audio!);
+                _info.AppendText($"[color=#7c7]playing · {audio!.SampleRate} Hz · {(audio.Channels == 2 ? "stereo" : "mono")} · {FmtTime(audio.Seconds)}[/color]");
+                break;
+            case BgwDecoder.Result.Atrac3Unsupported:
+                _info.AppendText("[color=#f88]ATRAC3 audio (Aht Urhgan and later) — not playable, just like the original Altana Viewer. Only sound/sound2/sound3 (ADPCM) tracks play.[/color]");
+                break;
+            default:
+                _info.AppendText($"[color=#f88]could not decode this .bgw ({r}).[/color]");
+                break;
+        }
+    }
+
+    // Which sound folder the current Music group maps to ("sound", "sound2", …) — the first token of
+    // its label (e.g. "sound2 Rise of the Zilart Music (…)").
+    private string MusicFolder()
+    {
+        var cat = CurCat;
+        if (cat is null || _libGroup.Selected < 0 || _libGroup.Selected >= cat.Groups.Count) return "sound";
+        string name = cat.Groups[_libGroup.Selected].Name.Trim();
+        int sp = name.IndexOf(' ');
+        return sp > 0 ? name[..sp] : name;
+    }
+
+    private static string FmtTime(double sec)
+    {
+        if (sec < 0 || double.IsNaN(sec)) sec = 0;
+        int t = (int)sec;
+        return $"{t / 60}:{t % 60:00}";
+    }
+
+    // Structural check of the BGW decoder + player bar (DATVIEWER_BGWSELFTEST): decode a synthetic
+    // codec-0 stream (no real .bgw ships here) and show it in the player. Not an audio-fidelity test.
+    private void BgwSelfTest()
+    {
+        const int blockAlign = 8, blockSize = 400, sampleRate = 22050;
+        int frameSize = blockAlign / 2 + 1;
+        var buf = new byte[0x30 + blockSize * frameSize];
+        foreach (var (i, ch) in "BGMStream".Select((c, i) => (i, c))) buf[i] = (byte)ch;
+        void W32(int o, uint v) { buf[o] = (byte)v; buf[o + 1] = (byte)(v >> 8); buf[o + 2] = (byte)(v >> 16); buf[o + 3] = (byte)(v >> 24); }
+        W32(0x0c, 0);                    // codec 0 (PSX ADPCM)
+        W32(0x10, (uint)buf.Length);     // file size
+        W32(0x18, blockSize);
+        W32(0x20, sampleRate); W32(0x24, 0);
+        W32(0x28, 0x30);                 // start offset
+        buf[0x2e] = 1;                   // mono
+        buf[0x2f] = blockAlign;
+        for (int f = 0; f < blockSize; f++)
+        {
+            int o = 0x30 + f * frameSize;
+            buf[o] = 0x08;               // coef 0, shift 8 → gentle
+            for (int b = 1; b < frameSize; b++) buf[o + b] = (byte)((f * 7 + b * 3) & 0xff); // arbitrary waveform
+        }
+        var r = BgwDecoder.TryDecode(buf, out var a);
+        GD.Print($"[bgwtest] result={r} samples={a?.SampleCount} ch={a?.Channels} sr={a?.SampleRate} sec={a?.Seconds:0.00}");
+        if (r == BgwDecoder.Result.Ok && a is not null) PlayMusic("Self-test tone (synthetic)", a);
+    }
+
     // ---- Library (named AltanaViewer catalog) ----------------------------------------------
 
     private Control _slotField = null!;
@@ -409,6 +589,7 @@ public partial class Main : Control
         _libTree.Clear();
         var root = _libTree.CreateItem();
         string q = _libSearch?.Text?.Trim() ?? "";
+        bool isMusic = CurCat?.Name == "Music"; // music files aren't DATs; don't grey by DAT existence
         int shown = 0;
         for (int i = 0; i < _libEntries.Count && shown < 4000; i++)
         {
@@ -426,7 +607,7 @@ public partial class Main : Control
             var it = _libTree.CreateItem(root);
             it.SetText(0, e.Label);
             it.SetMetadata(0, i);
-            if (!EntryExists(e)) it.SetCustomColor(0, UiTheme.Muted); // no DAT on disk under this root
+            if (!isMusic && !EntryExists(e)) it.SetCustomColor(0, UiTheme.Muted); // no DAT on disk under this root
             shown++;
         }
         if (shown == 0)
@@ -458,6 +639,8 @@ public partial class Main : Control
     /// Resolve a Library entry to on-disk DATs, preview the primary, and expose the full part list.
     private void LoadLibraryEntry(LibEntry e)
     {
+        if (CurCat?.Name == "Music") { PlayMusicEntry(e); return; } // .bgw audio, not a DAT
+
         var abs = new List<string>();
         foreach (var rel in e.RomPaths)
         {
@@ -585,6 +768,7 @@ public partial class Main : Control
         var cfg = new ConfigFile();
         if (cfg.Load(SettingsPath) != Error.Ok) return;
         _savedRoot = cfg.GetValue("paths", "rom_root", "").AsString();
+        _lastOpenDir = cfg.GetValue("paths", "last_open_dir", "").AsString();
         _uiScale = cfg.GetValue("ui", "scale", 1.5f).AsSingle();
         if (_uiScale is < 0.5f or > 4f) _uiScale = 1.5f;
     }
@@ -594,6 +778,7 @@ public partial class Main : Control
         var cfg = new ConfigFile();
         cfg.Load(SettingsPath); // preserve any keys we don't manage
         cfg.SetValue("paths", "rom_root", _root);
+        cfg.SetValue("paths", "last_open_dir", _lastOpenDir);
         cfg.SetValue("ui", "scale", _uiScale);
         cfg.Save(SettingsPath);
     }
@@ -1114,6 +1299,16 @@ public partial class Main : Control
         var offset = new Vector3(Mathf.Sin(_yaw) * cp, Mathf.Sin(_pitch), Mathf.Cos(_yaw) * cp) * _dist;
         _cam.Position = _focus + offset;
         _cam.LookAt(_focus, Vector3.Up);
+
+        // advance the music scrubber (skip while the user is dragging it)
+        if (_audio is not null && _audio.Playing && !_audio.StreamPaused && _musicLenSec > 0)
+        {
+            double pos = _audio.GetPlaybackPosition();
+            _musicSeekProgrammatic = true;
+            _musicSeek.Value = Math.Clamp(pos / _musicLenSec, 0, 1);
+            _musicSeekProgrammatic = false;
+            _musicTime.Text = $"{FmtTime(pos)} / {FmtTime(_musicLenSec)}";
+        }
     }
 
     private void OnViewportInput(InputEvent e)
@@ -1143,8 +1338,16 @@ public partial class Main : Control
             Size = new Vector2I(900, 640),
             Title = "Open a .DAT file",
         };
-        if (Directory.Exists(_root)) fd.CurrentDir = _root;
-        fd.FileSelected += p => { LoadDat(p); fd.QueueFree(); };
+        // Start in the last directory you browsed (remembered across launches), else the install root.
+        string startDir = Directory.Exists(_lastOpenDir) ? _lastOpenDir : (Directory.Exists(_root) ? _root : "");
+        if (startDir.Length > 0) fd.CurrentDir = startDir;
+        fd.FileSelected += p =>
+        {
+            _lastOpenDir = Path.GetDirectoryName(p) ?? _lastOpenDir;
+            SaveSettings();
+            LoadDat(p);
+            fd.QueueFree();
+        };
         fd.Canceled += fd.QueueFree;
         AddChild(fd);
         fd.PopupCentered();
