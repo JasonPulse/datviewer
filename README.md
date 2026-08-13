@@ -38,8 +38,8 @@ Two jobs:
    - **Chunks** — the chunk list with names, decoded types, and sizes.
    - **Hex** — a raw hex/ASCII dump.
 
-All decoding is **reused from Vellichor** (`../Vellichor/Vellichor.Dat` for the pure decoders, plus a
-few linked `Render/` files for the posed character build) — there is no duplicated DAT logic here.
+All decoding comes from **Vellichor** — its pure-C# decoders and posed-character build are vendored
+under `Vendor/` (see `Vendor/README.md`); Vellichor stays the source of truth.
 
 ### The named Library (`List/`)
 
@@ -74,20 +74,24 @@ race/slot, so it renders worn.
 ## Build from source
 
 ```
-# needs the sibling Vellichor checkout next to this one: ../Vellichor
-git clone git@github.com:JasonPulse/vellichor.git   # sibling dir
 git clone git@github.com:JasonPulse/datviewer.git
 /Applications/Godot_mono.app/Contents/MacOS/Godot --path ./datviewer
 ```
 
-Requires the sibling `../Vellichor` checkout (project references to its pure decoders + a few linked
-`Render/*.cs`). Godot 4.7.1, .NET 8. CI mirrors this by checking out `vellichor` as a sibling.
+Self-contained — Godot 4.7.1 + .NET 8, no other checkout needed. The FFXI DAT decoders and the
+posed/skinned model build are **vendored** under `Vendor/` (copied from
+[Vellichor](https://github.com/JasonPulse/vellichor); see `Vendor/README.md` to resync).
+
+The `List/` catalog and `data/models` tables carry a `.gdignore` (Godot never imports/packs them) and
+are read as loose files via an executable-relative path — so they work both from the project tree and
+when shipped beside the exported app.
 
 ## Releases (CI)
 
 Pushing Conventional Commits to `main` triggers `.github/workflows/release.yml`: semantic-release cuts
-a version + GitHub Release, then Godot exports the **Windows** (cross-exported on Linux) and **macOS**
-apps and attaches them. Vellichor's DAT corpus is gitignored, so CI never fetches game data.
+a version + GitHub Release, then Godot exports the **Windows** (cross-exported on Linux) and **macOS
+universal** apps — with `List/` + `data/` bundled alongside — and attaches them. No game data is ever
+in the repo or the CI environment.
 
 ### Headless / scripting
 
