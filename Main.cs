@@ -129,6 +129,9 @@ public partial class Main : Control
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_BGWSELFTEST") is not null)
             Callable.From(BgwSelfTest).CallDeferred();
 
+        if (int.TryParse(System.Environment.GetEnvironmentVariable("DATVIEWER_NAV"), out var navi))
+            _navTabs.CurrentTab = navi; // 0 Library, 1 Music, 2 ROM Tree
+
         // Headless check of the Library select→resolve→load path (DATVIEWER_LIBTEST=cat/group/slot).
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_LIBTEST") is { } lt)
             Callable.From(() => LibTest(lt)).CallDeferred();
@@ -203,6 +206,7 @@ public partial class Main : Control
 
         // two navigation modes: the AltanaViewer-style named Library, and the raw ROM tree
         var navTabs = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        _navTabs = navTabs;
         left.AddChild(navTabs);
 
         // -- Library tab (named, categorised) --
@@ -210,6 +214,12 @@ public partial class Main : Control
         libTab.AddThemeConstantOverride("separation", 6);
         navTabs.AddChild(libTab);
         BuildLibraryPanel(libTab);
+
+        // -- Music tab (FFXI .bgw tracks by expansion) --
+        var musicTab = new VBoxContainer { Name = "Music" };
+        musicTab.AddThemeConstantOverride("separation", 6);
+        navTabs.AddChild(musicTab);
+        BuildMusicTab(musicTab);
 
         // -- ROM Tree tab (raw folders) --
         var treeTab = new VBoxContainer { Name = "ROM Tree" };
@@ -394,11 +404,10 @@ public partial class Main : Control
         _musicTime.Text = $"0:00 / {FmtTime(_musicLenSec)}";
     }
 
-    /// Play a Library "Music" entry. Its ref is a bare track number (e.g. "034"); the file lives at
+    /// Play a Music-tab entry. Its ref is a bare track number (e.g. "034"); the file lives at
     /// <c>&lt;install&gt;/&lt;soundN&gt;/win/music/data/music&lt;id&gt;.bgw</c>.
-    private void PlayMusicEntry(LibEntry e)
+    private void PlayMusicEntry(LibEntry e, string folder)
     {
-        string folder = MusicFolder();
         string id = e.RefToken.Trim();
         string path = Path.Combine(_root, folder, "win", "music", "data", $"music{id}.bgw");
         _info.Clear();
@@ -427,17 +436,6 @@ public partial class Main : Control
                 _info.AppendText($"[color=#f88]could not decode this .bgw ({r}).[/color]");
                 break;
         }
-    }
-
-    // Which sound folder the current Music group maps to ("sound", "sound2", …) — the first token of
-    // its label (e.g. "sound2 Rise of the Zilart Music (…)").
-    private string MusicFolder()
-    {
-        var cat = CurCat;
-        if (cat is null || _libGroup.Selected < 0 || _libGroup.Selected >= cat.Groups.Count) return "sound";
-        string name = cat.Groups[_libGroup.Selected].Name.Trim();
-        int sp = name.IndexOf(' ');
-        return sp > 0 ? name[..sp] : name;
     }
 
     private static string FmtTime(double sec)
@@ -482,8 +480,9 @@ public partial class Main : Control
     {
         _catalog = new AltanaCatalog(AssetDir("List"));
 
+        // Music lives in its own top-level tab, not the Library category list.
         _libCat = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        foreach (var c in _catalog.Categories) _libCat.AddItem(c.Name);
+        foreach (var c in _catalog.Categories.Where(c => c.Name != "Music")) _libCat.AddItem(c.Name);
         _libCat.ItemSelected += _ => OnLibCategory();
         host.AddChild(WrapField("Category", _libCat, out _));
 
@@ -504,7 +503,7 @@ public partial class Main : Control
         _libTree.ItemSelected += OnLibItemSelected;
         host.AddChild(_libTree);
 
-        if (_catalog.Categories.Count > 0) { _libCat.Selected = 0; OnLibCategory(); }
+        if (_libCat.ItemCount > 0) { _libCat.Selected = 0; OnLibCategory(); }
     }
 
     private static HBoxContainer WrapField(string label, Control ctl, out Label lbl)
@@ -539,8 +538,8 @@ public partial class Main : Control
     }
 
     private LibCategory? CurCat =>
-        _catalog is not null && _libCat.Selected >= 0 && _libCat.Selected < _catalog.Categories.Count
-            ? _catalog.Categories[_libCat.Selected] : null;
+        _catalog is null || _libCat.Selected < 0 ? null
+            : _catalog.Categories.FirstOrDefault(c => c.Name == _libCat.GetItemText(_libCat.Selected));
 
     private void OnLibCategory()
     {
@@ -583,39 +582,113 @@ public partial class Main : Control
         PopulateLibraryTree();
     }
 
-    private void PopulateLibraryTree()
+    private void PopulateLibraryTree() => FillEntryTree(_libTree, _libEntries, _libSearch?.Text, greyMissing: true);
+
+    /// Fill a browser Tree from a list of catalog entries (shared by the Library and Music tabs).
+    /// Headers render as gold non-selectable rows; each real row stores its index as metadata.
+    /// When greyMissing is set, entries whose DAT isn't on disk under the current root are dimmed.
+    private void FillEntryTree(Tree tree, List<LibEntry> entries, string? search, bool greyMissing)
     {
-        if (_libTree is null) return;
-        _libTree.Clear();
-        var root = _libTree.CreateItem();
-        string q = _libSearch?.Text?.Trim() ?? "";
-        bool isMusic = CurCat?.Name == "Music"; // music files aren't DATs; don't grey by DAT existence
+        if (tree is null) return;
+        tree.Clear();
+        var root = tree.CreateItem();
+        string q = search?.Trim() ?? "";
         int shown = 0;
-        for (int i = 0; i < _libEntries.Count && shown < 4000; i++)
+        for (int i = 0; i < entries.Count && shown < 4000; i++)
         {
-            var e = _libEntries[i];
+            var e = entries[i];
             if (e.IsHeader)
             {
                 if (q.Length > 0) continue; // hide section headers while filtering
-                var h = _libTree.CreateItem(root);
+                var h = tree.CreateItem(root);
                 h.SetText(0, e.Label);
                 h.SetSelectable(0, false);
                 h.SetCustomColor(0, UiTheme.Gold);
                 continue;
             }
             if (q.Length > 0 && e.Label.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0) continue;
-            var it = _libTree.CreateItem(root);
+            var it = tree.CreateItem(root);
             it.SetText(0, e.Label);
             it.SetMetadata(0, i);
-            if (!isMusic && !EntryExists(e)) it.SetCustomColor(0, UiTheme.Muted); // no DAT on disk under this root
+            if (greyMissing && !EntryExists(e)) it.SetCustomColor(0, UiTheme.Muted);
             shown++;
         }
         if (shown == 0)
         {
-            var it = _libTree.CreateItem(root);
+            var it = tree.CreateItem(root);
             it.SetText(0, _catalog is null ? "  (no List/ catalog found)" : "  (nothing here)");
             it.SetSelectable(0, false);
         }
+    }
+
+    // ---- Music tab (FFXI .bgw tracks by expansion / sound folder) ---------------------------
+
+    private TabContainer _navTabs = null!;
+    private OptionButton _sndGroup = null!;
+    private LineEdit _sndSearch = null!;
+    private Tree _sndTree = null!;
+    private List<LibEntry> _sndEntries = new();
+
+    private LibCategory? MusicCat => _catalog?.Categories.FirstOrDefault(c => c.Name == "Music");
+
+    private void BuildMusicTab(VBoxContainer host)
+    {
+        var mus = MusicCat;
+        if (mus is null || mus.Groups.Count == 0) { host.AddChild(new Label { Text = "  (no music catalog)" }); return; }
+
+        _sndGroup = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        foreach (var g in mus.Groups) _sndGroup.AddItem(g.Name);
+        _sndGroup.ItemSelected += _ => OnSndGroup();
+        host.AddChild(WrapField("Set", _sndGroup, out _));
+
+        _sndSearch = new LineEdit { PlaceholderText = "search tracks…", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _sndSearch.TextChanged += _ => FillEntryTree(_sndTree, _sndEntries, _sndSearch.Text, greyMissing: false);
+        host.AddChild(_sndSearch);
+
+        var note = new Label
+        {
+            Text = "Pick a track to play. sound/sound2/sound3 (ADPCM) play; later sets are ATRAC3 and can't be decoded.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        };
+        note.AddThemeColorOverride("font_color", UiTheme.Muted);
+        note.AddThemeFontSizeOverride("font_size", 11);
+        host.AddChild(note);
+
+        _sndTree = new Tree { SizeFlagsVertical = SizeFlags.ExpandFill, HideRoot = true };
+        _sndTree.ItemSelected += OnSndItemSelected;
+        host.AddChild(_sndTree);
+
+        _sndGroup.Selected = 0;
+        OnSndGroup();
+    }
+
+    private void OnSndGroup()
+    {
+        var mus = MusicCat;
+        if (mus is null || _sndGroup.Selected < 0 || _sndGroup.Selected >= mus.Groups.Count) return;
+        _sndEntries = _catalog!.EntriesForGroup(mus.Groups[_sndGroup.Selected]);
+        FillEntryTree(_sndTree, _sndEntries, _sndSearch.Text, greyMissing: false);
+    }
+
+    private void OnSndItemSelected()
+    {
+        var it = _sndTree.GetSelected();
+        if (it is null) return;
+        var meta = it.GetMetadata(0);
+        if (meta.VariantType == Variant.Type.Nil) return;
+        int idx = meta.AsInt32();
+        if (idx < 0 || idx >= _sndEntries.Count) return;
+        PlayMusicEntry(_sndEntries[idx], SndFolder());
+    }
+
+    // Sound folder for the selected Music set ("sound", "sound2", …) — first token of its label.
+    private string SndFolder()
+    {
+        var mus = MusicCat;
+        if (mus is null || _sndGroup.Selected < 0 || _sndGroup.Selected >= mus.Groups.Count) return "sound";
+        string name = mus.Groups[_sndGroup.Selected].Name.Trim();
+        int sp = name.IndexOf(' ');
+        return sp > 0 ? name[..sp] : name;
     }
 
     private bool EntryExists(LibEntry e)
@@ -639,8 +712,6 @@ public partial class Main : Control
     /// Resolve a Library entry to on-disk DATs, preview the primary, and expose the full part list.
     private void LoadLibraryEntry(LibEntry e)
     {
-        if (CurCat?.Name == "Music") { PlayMusicEntry(e); return; } // .bgw audio, not a DAT
-
         var abs = new List<string>();
         foreach (var rel in e.RomPaths)
         {
