@@ -5,9 +5,8 @@ name: Release
 # When a release is cut it tags vX.Y.Z, updates CHANGELOG.md and creates the GitHub Release, then
 # the build jobs export the Windows + macOS apps and attach them.
 #
-# DatViewer reuses Vellichor's pure-C# decoders (project references) + a few linked Render/*.cs
-# sources, so CI checks out JasonPulse/vellichor as a SIBLING directory (../Vellichor). Vellichor's
-# 10GB DAT corpus is gitignored there, so the checkout stays small and no game data is ever fetched.
+# DatViewer is self-contained — the Vellichor decoders + render sources are vendored under Vendor/ —
+# so CI is a single normal checkout with no cross-repo access and no game data ever fetched.
 on:
   push:
     branches: [main]
@@ -68,20 +67,13 @@ jobs:
           - name: macos
             runner: macos-latest
             preset: "macOS"
-            out: build/macos/DatViewer.zip
+            out: build/macos/DatViewer.app
             asset: DatViewer-macos-universal
     steps:
       - name: Checkout DatViewer (release tag)
         uses: actions/checkout@v4
         with:
           ref: v${{ needs.release.outputs.version }}
-          path: DatViewer
-      - name: Checkout Vellichor (sibling — provides the decoders + render sources)
-        uses: actions/checkout@v4
-        with:
-          repository: JasonPulse/vellichor
-          ref: master
-          path: Vellichor
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
@@ -92,23 +84,26 @@ jobs:
           use-dotnet: false
           include-templates: true
       - name: Build C# + import
-        working-directory: DatViewer
         run: |
           dotnet build DatViewer.csproj -c ExportRelease
           godot --headless --import . || true
       - name: Export
-        working-directory: DatViewer
         run: |
           mkdir -p "$(dirname "${{ matrix.out }}")"
           godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.out }}"
+      - name: Bundle loose data (List/ + data/ ride next to the app, not in the .pck)
+        run: |
+          if [ "${{ matrix.name }}" = "macos" ]; then
+            cp -R List data "${{ matrix.out }}/Contents/Resources/"
+          else
+            cp -R List data "$(dirname "${{ matrix.out }}")/"
+          fi
       - name: Package
-        working-directory: DatViewer
         run: |
           cd "$(dirname "${{ matrix.out }}")"
-          zip -r "${{ matrix.asset }}-v${{ needs.release.outputs.version }}.zip" .
+          zip -qry "${{ matrix.asset }}-v${{ needs.release.outputs.version }}.zip" .
           echo "ASSET=$PWD/${{ matrix.asset }}-v${{ needs.release.outputs.version }}.zip" >> "$GITHUB_ENV"
       - name: Attach to release
-        working-directory: DatViewer
         run: gh release upload "v${{ needs.release.outputs.version }}" "$ASSET" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

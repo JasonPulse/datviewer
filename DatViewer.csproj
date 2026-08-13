@@ -5,23 +5,16 @@
     <RootNamespace>DatViewer</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- The vendored decoder sources (Vellichor.Dat) are written against implicit usings. -->
+    <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <!-- Reuse Vellichor's pure-C# DAT decoders (DatArchive path resolution, ChunkReader,
-       ImgDecoder textures, MmbDecoder/ModelDecoder models). No duplication. -->
-  <ItemGroup>
-    <ProjectReference Include="../Vellichor/Vellichor.Dat/Vellichor.Dat.csproj" />
-    <!-- XiHeadless.Game (EntityLook etc.) — needed by ModelResolver. -->
-    <ProjectReference Include="../Vellichor/XiProtocol/XiProtocol.csproj" />
-  </ItemGroup>
-
-  <!-- Reuse Vellichor's posed/skinned character build + the race/equipment path resolver, so a
-       character DAT previews posed and an EQUIPMENT part previews worn on a base race body. Linked
-       source, not copied — the one source of truth stays in Vellichor. -->
-  <ItemGroup>
-    <Compile Include="../Vellichor/Render/CharacterModel.cs" />
-    <Compile Include="../Vellichor/Render/SkinnedMeshBuilder.cs" />
-    <Compile Include="../Vellichor/Render/AnimationDriver.cs" />
-    <Compile Include="../Vellichor/Render/ModelResolver.cs" />
-  </ItemGroup>
+  <!--
+    DatViewer is SELF-CONTAINED: the FFXI DAT decoders + the posed/skinned model build are VENDORED
+    under Vendor/ (copied from JasonPulse/vellichor — Vellichor.Dat/*.cs, the four Render/*.cs, and the
+    one EntityLook struct). The SDK's default **/*.cs glob compiles them, so there is NO external
+    project reference — `dotnet publish` during a Godot export needs nothing outside this repo (a
+    sibling `../Vellichor` checkout is no longer required to build or release).
+    Resync source-of-truth + procedure: Vendor/README.md.
+  -->
 </Project>

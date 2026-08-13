@@ -300,7 +300,7 @@ public partial class Main : Control
 
     private void BuildLibraryPanel(VBoxContainer host)
     {
-        _catalog = new AltanaCatalog(ProjectSettings.GlobalizePath("res://List"));
+        _catalog = new AltanaCatalog(AssetDir("List"));
 
         _libCat = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         foreach (var c in _catalog.Categories) _libCat.AddItem(c.Name);
@@ -558,13 +558,24 @@ public partial class Main : Control
         RefreshSettingsStatus();
     }
 
-    /// Directory holding the vendored FFXI model tables. Vendored copy first (works in an export),
-    /// with the sibling Vellichor checkout as a dev fallback.
-    private static string ModelsDataDir()
+    /// Directory holding the vendored FFXI model tables (race/slot equipment paths).
+    private static string ModelsDataDir() => AssetDir("data/models");
+
+    /// Resolve a bundled data folder (List, data/models) to a REAL on-disk path — needed because the
+    /// catalog + model tables are read with System.IO, which can't read from inside an exported .pck.
+    /// So these folders ship as loose files (they carry a `.gdignore`, so Godot never packs/imports
+    /// them). Order: the project tree (editor / `--path`) → next to the binary (Windows/Linux) →
+    /// inside the macOS .app bundle (Contents/Resources).
+    private static string AssetDir(string rel)
     {
-        string vendored = ProjectSettings.GlobalizePath("res://data/models");
-        if (Directory.Exists(vendored)) return vendored;
-        return ProjectSettings.GlobalizePath("res://../Vellichor/data/models");
+        string res = ProjectSettings.GlobalizePath("res://" + rel);
+        if (Directory.Exists(res)) return res;                       // dev: files are on disk
+        string exeDir = Path.GetDirectoryName(OS.GetExecutablePath()) ?? "";
+        string beside = Path.Combine(exeDir, rel);
+        if (Directory.Exists(beside)) return beside;                 // Windows/Linux: beside the exe
+        string macRes = Path.GetFullPath(Path.Combine(exeDir, "..", "Resources", rel));
+        if (Directory.Exists(macRes)) return macRes;                 // macOS: inside the .app bundle
+        return res;                                                  // give up gracefully
     }
 
     // ---- settings (persisted to user://settings.cfg) ---------------------------------------
@@ -1198,12 +1209,15 @@ public partial class Main : Control
         GD.Print("[dv] " + msg);
     }
 
-    // Headless screenshot helper (DATVIEWER_SHOT).
+    // Headless screenshot helper (DATVIEWER_SHOT). A true --headless *exported* build uses the dummy
+    // renderer with no framebuffer, so GetImage() is null — guard it so the helper quits cleanly
+    // instead of throwing/hanging (screenshots still work from the editor build, which has a display).
     private async void ShotAfter(string file, int frames)
     {
         for (int i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        GetViewport().GetTexture().GetImage().SavePng(file);
-        GD.Print("saved -> " + file);
+        var img = GetViewport().GetTexture()?.GetImage();
+        if (img is not null) { img.SavePng(file); GD.Print("saved -> " + file); }
+        else GD.Print("no framebuffer (headless) — skipped screenshot " + file);
         GetTree().Quit();
     }
 }
