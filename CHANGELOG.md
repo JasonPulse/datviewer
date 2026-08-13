@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/JasonPulse/datviewer/compare/v1.0.0...v1.0.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* make the release build self-contained and export-correct ([a9a2deb](https://github.com/JasonPulse/datviewer/commit/a9a2deb8c0676c6e84ffcea888d3a070eb6ed827))
+
 # 1.0.0 (2026-08-13)
 
 
