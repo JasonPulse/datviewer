@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/JasonPulse/datviewer/compare/v1.1.0...v1.2.0) (2026-08-13)
+
+
+### Features
+
+* move music to its own top-level Music tab ([12a901c](https://github.com/JasonPulse/datviewer/commit/12a901cd1ff5d48ebe7549ad34d3b06f4992a931))
+
 # [1.1.0](https://github.com/JasonPulse/datviewer/compare/v1.0.1...v1.1.0) (2026-08-13)
 
 
