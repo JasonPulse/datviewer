@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bav2mho62ecq7"
+
+[deps]
+
+files=["res://List/NPC/unclassified.Qiqirn Mine.translation"]
+
+source_file="res://List/NPC/unclassified.csv"
+dest_files=["res://List/NPC/unclassified.Qiqirn Mine.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

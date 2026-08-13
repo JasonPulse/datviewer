@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ddiqcup6vm78x"
+
+[deps]
+
+files=["res://List/NPC/mounts.Chocobo Companion.translation"]
+
+source_file="res://List/NPC/mounts.csv"
+dest_files=["res://List/NPC/mounts.Chocobo Companion.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

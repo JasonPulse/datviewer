@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://e4e35p8sniv5"
+
+[deps]
+
+files=["res://List/PC/Tarutaru/Motion. 51/25.translation"]
+
+source_file="res://List/PC/Tarutaru/Motion.csv"
+dest_files=["res://List/PC/Tarutaru/Motion. 51/25.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://yrdmvkt37lx5"
+
+[deps]
+
+files=["res://List/Music/Music3. Depths of the Soul.translation"]
+
+source_file="res://List/Music/Music3.csv"
+dest_files=["res://List/Music/Music3. Depths of the Soul.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

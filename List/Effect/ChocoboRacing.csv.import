@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cepeunv8tkfbj"
+
+[deps]
+
+files=["res://List/Effect/ChocoboRacing.Chocobo Alert 1.translation"]
+
+source_file="res://List/Effect/ChocoboRacing.csv"
+dest_files=["res://List/Effect/ChocoboRacing.Chocobo Alert 1.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

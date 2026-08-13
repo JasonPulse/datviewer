@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b6s54m3ue2jdw"
+
+[deps]
+
+source_file="res://List/PC/ElvaanF/Range.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

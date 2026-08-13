@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ns85iino7c3a"
+
+[deps]
+
+files=["res://List/NPC/abyssea.Abyssea Scroll Bomb.translation"]
+
+source_file="res://List/NPC/abyssea.csv"
+dest_files=["res://List/NPC/abyssea.Abyssea Scroll Bomb.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

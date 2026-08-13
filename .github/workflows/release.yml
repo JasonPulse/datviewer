@@ -1,0 +1,114 @@
+name: Release
+
+# Semantic-release drives versioning off Conventional Commits on `main`:
+#   feat: -> minor, fix: -> patch, feat!/BREAKING CHANGE -> major.
+# When a release is cut it tags vX.Y.Z, updates CHANGELOG.md and creates the GitHub Release, then
+# the build jobs export the Windows + macOS apps and attach them.
+#
+# DatViewer reuses Vellichor's pure-C# decoders (project references) + a few linked Render/*.cs
+# sources, so CI checks out JasonPulse/vellichor as a SIBLING directory (../Vellichor). Vellichor's
+# 10GB DAT corpus is gitignored there, so the checkout stays small and no game data is ever fetched.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.7.1"
+  DOTNET_VERSION: "8.0.x"
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  release:
+    name: Semantic release (version + GitHub release)
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.semantic.outputs.new_release_published }}
+      version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run semantic-release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/changelog@6
+            @semantic-release/git@10
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------------------------
+  build:
+    name: Export ${{ matrix.name }}
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            runner: ubuntu-latest        # Godot cross-exports Windows from Linux
+            preset: "Windows Desktop"
+            out: build/windows/DatViewer.exe
+            asset: DatViewer-windows-x86_64
+          - name: macos
+            runner: macos-latest
+            preset: "macOS"
+            out: build/macos/DatViewer.zip
+            asset: DatViewer-macos-universal
+    steps:
+      - name: Checkout DatViewer (release tag)
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          path: DatViewer
+      - name: Checkout Vellichor (sibling — provides the decoders + render sources)
+        uses: actions/checkout@v4
+        with:
+          repository: JasonPulse/vellichor
+          ref: master
+          path: Vellichor
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Setup Godot ${{ env.GODOT_VERSION }} (.NET)
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Build C# + import
+        working-directory: DatViewer
+        run: |
+          dotnet build DatViewer.csproj -c ExportRelease
+          godot --headless --import . || true
+      - name: Export
+        working-directory: DatViewer
+        run: |
+          mkdir -p "$(dirname "${{ matrix.out }}")"
+          godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.out }}"
+      - name: Package
+        working-directory: DatViewer
+        run: |
+          cd "$(dirname "${{ matrix.out }}")"
+          zip -r "${{ matrix.asset }}-v${{ needs.release.outputs.version }}.zip" .
+          echo "ASSET=$PWD/${{ matrix.asset }}-v${{ needs.release.outputs.version }}.zip" >> "$GITHUB_ENV"
+      - name: Attach to release
+        working-directory: DatViewer
+        run: gh release upload "v${{ needs.release.outputs.version }}" "$ASSET" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

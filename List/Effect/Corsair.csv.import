@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bl6x776v82xa1"
+
+[deps]
+
+files=["res://List/Effect/Corsair.Monk's Roll.translation"]
+
+source_file="res://List/Effect/Corsair.csv"
+dest_files=["res://List/Effect/Corsair.Monk's Roll.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

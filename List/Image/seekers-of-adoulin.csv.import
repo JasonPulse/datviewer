@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://7y43qbis30ek"
+
+[deps]
+
+files=["res://List/Image/seekers-of-adoulin. Ceizak Battlegrounds.translation"]
+
+source_file="res://List/Image/seekers-of-adoulin.csv"
+dest_files=["res://List/Image/seekers-of-adoulin. Ceizak Battlegrounds.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

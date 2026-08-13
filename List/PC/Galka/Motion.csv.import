@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://byw3a1mqn1fwv"
+
+[deps]
+
+files=["res://List/PC/Galka/Motion. 60/120.translation"]
+
+source_file="res://List/PC/Galka/Motion.csv"
+dest_files=["res://List/PC/Galka/Motion. 60/120.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

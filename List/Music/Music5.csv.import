@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dqswewo1k60am"
+
+[deps]
+
+files=["res://List/Music/Music5. [Unplayable Music] Wings of the Goddess.translation"]
+
+source_file="res://List/Music/Music5.csv"
+dest_files=["res://List/Music/Music5. [Unplayable Music] Wings of the Goddess.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

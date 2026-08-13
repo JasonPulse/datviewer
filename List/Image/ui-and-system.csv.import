@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ce0xk0iaufrka"
+
+[deps]
+
+files=["res://List/Image/ui-and-system. Elvaan Female A.translation"]
+
+source_file="res://List/Image/ui-and-system.csv"
+dest_files=["res://List/Image/ui-and-system. Elvaan Female A.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

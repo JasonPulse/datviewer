@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b5gc1ts6u87w2"
+
+[deps]
+
+files=["res://List/Image/index. Base Game (Starter Zones) Maps.translation"]
+
+source_file="res://List/Image/index.csv"
+dest_files=["res://List/Image/index. Base Game (Starter Zones) Maps.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

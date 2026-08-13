@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cep0txqwyvx5x"
+
+[deps]
+
+files=["res://List/Image/cutscenes. Rhapsodies of Vanadiel.translation"]
+
+source_file="res://List/Image/cutscenes.csv"
+dest_files=["res://List/Image/cutscenes. Rhapsodies of Vanadiel.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

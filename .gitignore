@@ -1,0 +1,28 @@
+# Godot 4
+.godot/
+*.translation
+
+# .NET
+bin/
+obj/
+*.user
+*.tmp
+
+# Rider / IDE
+.idea/
+.vs/
+
+# macOS
+.DS_Store
+
+# Export output
+build/
+*.pck
+
+# NEVER commit FFXI game data. DatViewer reads DATs from the user's own install at runtime;
+# none live in this repo. These globs are belt-and-suspenders so a stray corpus can't be pushed.
+*.DAT
+*.dat
+corpus/
+ROM/
+ROM[0-9]*/

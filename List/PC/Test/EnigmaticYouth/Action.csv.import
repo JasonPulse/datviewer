@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bkneoj877un7j"
+
+[deps]
+
+source_file="res://List/PC/Test/EnigmaticYouth/Action.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

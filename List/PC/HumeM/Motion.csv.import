@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://rd4ko6ts58vc"
+
+[deps]
+
+files=["res://List/PC/HumeM/Motion. 32/22.translation"]
+
+source_file="res://List/PC/HumeM/Motion.csv"
+dest_files=["res://List/PC/HumeM/Motion. 32/22.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

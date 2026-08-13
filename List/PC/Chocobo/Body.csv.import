@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://0ns2c1trnww"
+
+[deps]
+
+files=["res://List/PC/Chocobo/Body.Body (Yellow).translation"]
+
+source_file="res://List/PC/Chocobo/Body.csv"
+dest_files=["res://List/PC/Chocobo/Body.Body (Yellow).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

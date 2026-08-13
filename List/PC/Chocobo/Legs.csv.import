@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b5ridl2jrde75"
+
+[deps]
+
+files=["res://List/PC/Chocobo/Legs.Tail (Yellow).translation"]
+
+source_file="res://List/PC/Chocobo/Legs.csv"
+dest_files=["res://List/PC/Chocobo/Legs.Tail (Yellow).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,25 @@
+; DatViewer — FFXI DAT browser/viewer (Godot 4.7, C#, mono)
+; Browse a retail install's ROM tree to find where a DAT lives (the path to mirror in
+; XIPivot), and open any .DAT (retail or user-made) to preview its textures/model/chunks.
+
+config_version=5
+
+[application]
+
+config/name="FFXI DAT Viewer"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+
+[dotnet]
+
+project/assembly_name="DatViewer"
+
+[display]
+
+window/size/viewport_width=1400
+window/size/viewport_height=900
+window/dpi/allow_hidpi=true
+
+[rendering]
+
+renderer/rendering_method="forward_plus"

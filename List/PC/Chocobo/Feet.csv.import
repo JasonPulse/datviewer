@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bop3cl6qhggj1"
+
+[deps]
+
+files=["res://List/PC/Chocobo/Feet.Feet (Yellow).translation"]
+
+source_file="res://List/PC/Chocobo/Feet.csv"
+dest_files=["res://List/PC/Chocobo/Feet.Feet (Yellow).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

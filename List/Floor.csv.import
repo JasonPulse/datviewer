@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bulsqpk8k4ysr"
+
+[deps]
+
+files=["res://List/Floor.2/12/119.translation", "res://List/Floor.kusa.translation"]
+
+source_file="res://List/Floor.csv"
+dest_files=["res://List/Floor.2/12/119.translation", "res://List/Floor.kusa.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

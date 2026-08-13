@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c3fgriieph0oy"
+
+[deps]
+
+files=["res://List/PC/Mithra/Motion. 56/23.translation"]
+
+source_file="res://List/PC/Mithra/Motion.csv"
+dest_files=["res://List/PC/Mithra/Motion. 56/23.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

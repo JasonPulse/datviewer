@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://3pb6rwf6yof4"
+
+[deps]
+
+files=["res://List/PC/LilBoy/Face.Hume blonde hair.translation"]
+
+source_file="res://List/PC/LilBoy/Face.csv"
+dest_files=["res://List/PC/LilBoy/Face.Hume blonde hair.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

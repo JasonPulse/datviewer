@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b61exd3wslipl"
+
+[deps]
+
+files=["res://List/Effect/Song.Foe Requiem.translation"]
+
+source_file="res://List/Effect/Song.csv"
+dest_files=["res://List/Effect/Song.Foe Requiem.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

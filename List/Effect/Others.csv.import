@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cca0ab0snroh7"
+
+[deps]
+
+files=["res://List/Effect/Others.Warp (Event).translation"]
+
+source_file="res://List/Effect/Others.csv"
+dest_files=["res://List/Effect/Others.Warp (Event).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

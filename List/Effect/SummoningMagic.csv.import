@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cs43t7liiigtd"
+
+[deps]
+
+files=["res://List/Effect/SummoningMagic. Summon: Carbuncle.translation"]
+
+source_file="res://List/Effect/SummoningMagic.csv"
+dest_files=["res://List/Effect/SummoningMagic. Summon: Carbuncle.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

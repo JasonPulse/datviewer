@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d14fyiae53eov"
+
+[deps]
+
+files=["res://List/NPC/furniture.Pile of Chocobo Bedding m.translation"]
+
+source_file="res://List/NPC/furniture.csv"
+dest_files=["res://List/NPC/furniture.Pile of Chocobo Bedding m.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

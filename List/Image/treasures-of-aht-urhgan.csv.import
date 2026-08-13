@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c5oj230s1l4k1"
+
+[deps]
+
+files=["res://List/Image/treasures-of-aht-urhgan. Aht Urhgan Whitegate.translation"]
+
+source_file="res://List/Image/treasures-of-aht-urhgan.csv"
+dest_files=["res://List/Image/treasures-of-aht-urhgan. Aht Urhgan Whitegate.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d2cwbclhdbvr8"
+
+[deps]
+
+files=["res://List/NPC/limbus.Omega Forerunner.translation"]
+
+source_file="res://List/NPC/limbus.csv"
+dest_files=["res://List/NPC/limbus.Omega Forerunner.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

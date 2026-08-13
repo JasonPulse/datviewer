@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d2ve0ica40lsx"
+
+[deps]
+
+files=["res://List/Image/wings-of-the-goddess. Bastok Markets (S).translation"]
+
+source_file="res://List/Image/wings-of-the-goddess.csv"
+dest_files=["res://List/Image/wings-of-the-goddess. Bastok Markets (S).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

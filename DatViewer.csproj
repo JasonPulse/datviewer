@@ -1,0 +1,27 @@
+<Project Sdk="Godot.NET.Sdk/4.7.1">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>DatViewer</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Reuse Vellichor's pure-C# DAT decoders (DatArchive path resolution, ChunkReader,
+       ImgDecoder textures, MmbDecoder/ModelDecoder models). No duplication. -->
+  <ItemGroup>
+    <ProjectReference Include="../Vellichor/Vellichor.Dat/Vellichor.Dat.csproj" />
+    <!-- XiHeadless.Game (EntityLook etc.) — needed by ModelResolver. -->
+    <ProjectReference Include="../Vellichor/XiProtocol/XiProtocol.csproj" />
+  </ItemGroup>
+
+  <!-- Reuse Vellichor's posed/skinned character build + the race/equipment path resolver, so a
+       character DAT previews posed and an EQUIPMENT part previews worn on a base race body. Linked
+       source, not copied — the one source of truth stays in Vellichor. -->
+  <ItemGroup>
+    <Compile Include="../Vellichor/Render/CharacterModel.cs" />
+    <Compile Include="../Vellichor/Render/SkinnedMeshBuilder.cs" />
+    <Compile Include="../Vellichor/Render/AnimationDriver.cs" />
+    <Compile Include="../Vellichor/Render/ModelResolver.cs" />
+  </ItemGroup>
+</Project>

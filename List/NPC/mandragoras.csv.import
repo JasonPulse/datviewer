@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bovo0m2ihngy7"
+
+[deps]
+
+files=["res://List/NPC/mandragoras.Red Tipped Korrigan.translation"]
+
+source_file="res://List/NPC/mandragoras.csv"
+dest_files=["res://List/NPC/mandragoras.Red Tipped Korrigan.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

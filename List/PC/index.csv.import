@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://4r6bsh3oi1n1"
+
+[deps]
+
+files=["res://List/PC/index.Hume Male.translation", "res://List/PC/index.27/82.translation"]
+
+source_file="res://List/PC/index.csv"
+dest_files=["res://List/PC/index.Hume Male.translation", "res://List/PC/index.27/82.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

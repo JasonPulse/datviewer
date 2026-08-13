@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cq6gxousc8yys"
+
+[deps]
+
+files=["res://List/Image/dynamis. Dynamis .translation"]
+
+source_file="res://List/Image/dynamis.csv"
+dest_files=["res://List/Image/dynamis. Dynamis .translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

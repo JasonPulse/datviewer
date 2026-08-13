@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dpu6y4uvgeoj0"
+
+[deps]
+
+files=["res://List/Effect/Automaton Weapon Skills. .translation"]
+
+source_file="res://List/Effect/Automaton Weapon Skills.csv"
+dest_files=["res://List/Effect/Automaton Weapon Skills. .translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

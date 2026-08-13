@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c3kj3vtwnn3sa"
+
+[deps]
+
+files=["res://List/Music/Music9. [Unplayable Music] Steel Sings.translation"]
+
+source_file="res://List/Music/Music9.csv"
+dest_files=["res://List/Music/Music9. [Unplayable Music] Steel Sings.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

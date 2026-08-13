@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dfqedggwcf0hy"
+
+[deps]
+
+source_file="res://List/PC/LilBoy/Feet.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

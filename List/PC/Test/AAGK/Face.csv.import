@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c48fsi77pm2pj"
+
+[deps]
+
+source_file="res://List/PC/Test/AAGK/Face.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

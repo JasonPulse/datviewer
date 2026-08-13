@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bgp7eto0ytt7y"
+
+[deps]
+
+files=["res://List/Image/abyssea. Abyssea .translation"]
+
+source_file="res://List/Image/abyssea.csv"
+dest_files=["res://List/Image/abyssea. Abyssea .translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

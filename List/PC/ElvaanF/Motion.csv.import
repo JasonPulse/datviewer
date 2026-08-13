@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bdma27qdrgvmw"
+
+[deps]
+
+files=["res://List/PC/ElvaanF/Motion. 46/63.translation"]
+
+source_file="res://List/PC/ElvaanF/Motion.csv"
+dest_files=["res://List/PC/ElvaanF/Motion. 46/63.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

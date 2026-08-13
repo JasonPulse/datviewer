@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b2ba43afdfbof"
+
+[deps]
+
+files=["res://List/Effect/Unknown Effects.PC.translation"]
+
+source_file="res://List/Effect/Unknown Effects.csv"
+dest_files=["res://List/Effect/Unknown Effects.PC.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

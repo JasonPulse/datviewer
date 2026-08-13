@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dhv57w275qx4j"
+
+[deps]
+
+files=["res://List/PC/Test/Lilith/Face.Lady Lilith.translation"]
+
+source_file="res://List/PC/Test/Lilith/Face.csv"
+dest_files=["res://List/PC/Test/Lilith/Face.Lady Lilith.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

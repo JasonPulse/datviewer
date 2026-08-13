@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dd26ldr362ihc"
+
+[deps]
+
+files=["res://List/Music/Music1. We Are Vana'diel.translation"]
+
+source_file="res://List/Music/Music1.csv"
+dest_files=["res://List/Music/Music1. We Are Vana'diel.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

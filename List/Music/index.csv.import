@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bee3hoiaa1jdp"
+
+[deps]
+
+files=["res://List/Music/index. sound Base Game and TVR (Some Songs Playable. Download AltanaListener to listen...).translation"]
+
+source_file="res://List/Music/index.csv"
+dest_files=["res://List/Music/index. sound Base Game and TVR (Some Songs Playable. Download AltanaListener to listen...).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

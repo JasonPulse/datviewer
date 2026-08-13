@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cbpemyrd8domc"
+
+[deps]
+
+files=["res://List/Effect/Ninjutsu.Katon: Ichi.translation"]
+
+source_file="res://List/Effect/Ninjutsu.csv"
+dest_files=["res://List/Effect/Ninjutsu.Katon: Ichi.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

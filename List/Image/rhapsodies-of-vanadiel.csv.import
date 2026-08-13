@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dadh0ef1dekq0"
+
+[deps]
+
+files=["res://List/Image/rhapsodies-of-vanadiel. Escha .translation"]
+
+source_file="res://List/Image/rhapsodies-of-vanadiel.csv"
+dest_files=["res://List/Image/rhapsodies-of-vanadiel. Escha .translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

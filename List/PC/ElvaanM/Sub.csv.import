@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://du45v2wh4hvfo"
+
+[deps]
+
+source_file="res://List/PC/ElvaanM/Sub.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

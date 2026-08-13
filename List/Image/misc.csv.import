@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://feoo4ylrsaie"
+
+[deps]
+
+files=["res://List/Image/misc. ???.translation"]
+
+source_file="res://List/Image/misc.csv"
+dest_files=["res://List/Image/misc. ???.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

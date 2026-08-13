@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cmi10n556n48o"
+
+[deps]
+
+files=["res://List/PC/Test/Moogles/Face.Riko Kupenreich.translation"]
+
+source_file="res://List/PC/Test/Moogles/Face.csv"
+dest_files=["res://List/PC/Test/Moogles/Face.Riko Kupenreich.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cev0uah7ta13f"
+
+[deps]
+
+files=["res://List/Music/Music6. [Unplayable Music] Echoes of Creation.translation"]
+
+source_file="res://List/Music/Music6.csv"
+dest_files=["res://List/Music/Music6. [Unplayable Music] Echoes of Creation.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

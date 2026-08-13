@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bdnkgh6h4bofl"
+
+[deps]
+
+files=["res://List/PC/Test/Prishe/Face.Prishe (Crown and Amulet).translation"]
+
+source_file="res://List/PC/Test/Prishe/Face.csv"
+dest_files=["res://List/PC/Test/Prishe/Face.Prishe (Crown and Amulet).translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

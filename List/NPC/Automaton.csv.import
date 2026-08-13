@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cnm3xw8j0r5pb"
+
+[deps]
+
+files=["res://List/NPC/Automaton.Harlequin Frame + Harlequin Head.translation", "res://List/NPC/Automaton.162/110.translation"]
+
+source_file="res://List/NPC/Automaton.csv"
+dest_files=["res://List/NPC/Automaton.Harlequin Frame + Harlequin Head.translation", "res://List/NPC/Automaton.162/110.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

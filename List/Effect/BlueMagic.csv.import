@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cqoxbou6h5kbl"
+
+[deps]
+
+files=["res://List/Effect/BlueMagic.Gastric Bomb.translation"]
+
+source_file="res://List/Effect/BlueMagic.csv"
+dest_files=["res://List/Effect/BlueMagic.Gastric Bomb.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

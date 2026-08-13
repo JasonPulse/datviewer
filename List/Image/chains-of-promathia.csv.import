@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d0y8vii3f4a5l"
+
+[deps]
+
+files=["res://List/Image/chains-of-promathia. Abdhaljs Isle.translation"]
+
+source_file="res://List/Image/chains-of-promathia.csv"
+dest_files=["res://List/Image/chains-of-promathia. Abdhaljs Isle.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true
