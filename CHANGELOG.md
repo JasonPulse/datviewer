@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/JasonPulse/datviewer/compare/v1.0.1...v1.1.0) (2026-08-13)
+
+
+### Features
+
+* play FFXI music (.bgw) and remember the Open-file folder ([e9c61a5](https://github.com/JasonPulse/datviewer/commit/e9c61a5488aa9f1976307a084051d10f468fe0e4))
+
 ## [1.0.1](https://github.com/JasonPulse/datviewer/compare/v1.0.0...v1.0.1) (2026-08-13)
 
 
