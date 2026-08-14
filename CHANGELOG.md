@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/JasonPulse/datviewer/compare/v1.2.1...v1.2.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* CI exported with the non-.NET Godot (use-dotnet: true) ([3e2ac03](https://github.com/JasonPulse/datviewer/commit/3e2ac0321cb94de2f9a447e85c20ef6ae0c91c22))
+
 ## [1.2.1](https://github.com/JasonPulse/datviewer/compare/v1.2.0...v1.2.1) (2026-08-14)
 
 
