@@ -145,8 +145,11 @@ public partial class Main : Control
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_BGWSELFTEST") is not null)
             Callable.From(BgwSelfTest).CallDeferred();
 
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_ANIMTEST") is { } at)
+            Callable.From(() => AnimTest(at)).CallDeferred();
+
         if (int.TryParse(System.Environment.GetEnvironmentVariable("DATVIEWER_NAV"), out var navi))
-            _navTabs.CurrentTab = navi; // 0 Library, 1 Music, 2 ROM Tree
+            _navTabs.CurrentTab = navi; // 0 Library, 1 Animation, 2 Music, 3 ROM Tree
 
         // Headless check of the Library select→resolve→load path (DATVIEWER_LIBTEST=cat/group/slot).
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_LIBTEST") is { } lt)
@@ -230,6 +233,12 @@ public partial class Main : Control
         libTab.AddThemeConstantOverride("separation", 6);
         navTabs.AddChild(libTab);
         BuildLibraryPanel(libTab);
+
+        // -- Animation tab (named actions per race) --
+        var animTab = new VBoxContainer { Name = "Animation" };
+        animTab.AddThemeConstantOverride("separation", 6);
+        navTabs.AddChild(animTab);
+        BuildAnimationTab(animTab);
 
         // -- Music tab (FFXI .bgw tracks by expansion) --
         var musicTab = new VBoxContainer { Name = "Music" };
@@ -677,7 +686,16 @@ public partial class Main : Control
     private Tree _sndTree = null!;
     private List<LibEntry> _sndEntries = new();
 
+    // Animation tab (named actions per race, from AltanaViewer Action.csv)
+    private OptionButton _actRace = null!;
+    private LineEdit _actSearch = null!;
+    private Tree _actTree = null!;
+    private List<LibEntry> _actEntries = new();
+    private List<byte[]>? _extraClipDats; // clip DATs merged when assembling (set by the Animation tab)
+    private string? _prefClipName;        // clip to auto-select after assembling (the opened action)
+
     private LibCategory? MusicCat => _catalog?.Categories.FirstOrDefault(c => c.Name == "Music");
+    private LibCategory? PcCat => _catalog?.Categories.FirstOrDefault(c => c.Name == "PC");
 
     private void BuildMusicTab(VBoxContainer host)
     {
@@ -737,6 +755,128 @@ public partial class Main : Control
         string name = mus.Groups[_sndGroup.Selected].Name.Trim();
         int sp = name.IndexOf(' ');
         return sp > 0 ? name[..sp] : name;
+    }
+
+    // ---- Animation tab (named actions per race, from Action.csv) -----------------------------
+
+    // PC races that have a non-empty Action.csv and a playable base body (child races / chocobo skip).
+    private List<LibGroup> AnimRaces()
+    {
+        var pc = PcCat;
+        if (pc is null) return new();
+        return pc.Groups.Where(g => PcRaceId(g.Name) > 0
+                                    && new FileInfo(Path.Combine(g.FolderPath, "Action.csv")) is { Exists: true, Length: > 0 })
+                        .ToList();
+    }
+
+    private void BuildAnimationTab(VBoxContainer host)
+    {
+        var races = AnimRaces();
+        if (races.Count == 0) { host.AddChild(new Label { Text = "  (no animation catalog)" }); return; }
+
+        _actRace = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        foreach (var g in races) _actRace.AddItem(g.Name);
+        _actRace.ItemSelected += _ => OnActRace();
+        host.AddChild(WrapField("Race", _actRace, out _));
+
+        _actSearch = new LineEdit { PlaceholderText = "search actions…", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _actSearch.TextChanged += _ => FillEntryTree(_actTree, _actEntries, _actSearch.Text, greyMissing: true);
+        host.AddChild(_actSearch);
+
+        var note = new Label
+        {
+            Text = "Pick an action to play it on that race's body (needs your FFXI install).",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        };
+        note.AddThemeColorOverride("font_color", UiTheme.Muted);
+        note.AddThemeFontSizeOverride("font_size", 11);
+        host.AddChild(note);
+
+        _actTree = new Tree { SizeFlagsVertical = SizeFlags.ExpandFill, HideRoot = true };
+        _actTree.ItemSelected += OnActItemSelected;
+        host.AddChild(_actTree);
+
+        _actRace.Selected = 0;
+        OnActRace();
+    }
+
+    // Headless: pick a race, then play its first action whose DATs exist under the root.
+    private void AnimTest(string race)
+    {
+        for (int i = 0; i < _actRace.ItemCount; i++)
+            if (_actRace.GetItemText(i) == race) { _actRace.Selected = i; OnActRace(); break; }
+        var g = CurActRace();
+        if (g is null) { GD.Print("[animtest] no race"); return; }
+        foreach (var e in _actEntries)
+        {
+            if (e.IsHeader || !EntryExists(e)) continue;
+            GD.Print($"[animtest] {race} -> '{e.Label}' ({e.RefToken}) -> {string.Join(", ", e.RomPaths)}");
+            PlayAnimationEntry(e, PcRaceId(g.Name), g.Name);
+            return;
+        }
+        GD.Print("[animtest] no loadable action");
+    }
+
+    private LibGroup? CurActRace()
+    {
+        var races = AnimRaces();
+        return _actRace.Selected >= 0 && _actRace.Selected < races.Count ? races[_actRace.Selected] : null;
+    }
+
+    private void OnActRace()
+    {
+        var g = CurActRace();
+        if (g is null) return;
+        _actEntries = AltanaCatalog.ParseList(Path.Combine(g.FolderPath, "Action.csv"));
+        FillEntryTree(_actTree, _actEntries, _actSearch.Text, greyMissing: true);
+    }
+
+    private void OnActItemSelected()
+    {
+        var it = _actTree.GetSelected();
+        if (it is null) return;
+        var meta = it.GetMetadata(0);
+        if (meta.VariantType == Variant.Type.Nil) return;
+        int idx = meta.AsInt32();
+        var g = CurActRace();
+        if (g is null || idx < 0 || idx >= _actEntries.Count) return;
+        PlayAnimationEntry(_actEntries[idx], PcRaceId(g.Name), g.Name);
+    }
+
+    /// Apply a named action's clip DAT(s) to the race's base body and play it in the Model tab.
+    private void PlayAnimationEntry(LibEntry e, int raceId, string raceLabel)
+    {
+        if (_resolver?.Ready != true) { Flash("set your FFXI install root first (⚙ Settings)"); return; }
+
+        var abs = new List<string>();
+        foreach (var rel in e.RomPaths)
+        {
+            string p = Path.Combine(_root, rel);
+            if (File.Exists(p)) abs.Add(p);
+        }
+        if (abs.Count == 0) { Flash($"'{e.Label}': animation DAT(s) not found under your install (ref {e.RefToken})"); return; }
+
+        var animDats = new List<byte[]>();
+        foreach (var p in abs) { try { animDats.Add(File.ReadAllBytes(p)); } catch { } }
+        if (animDats.Count == 0) { Flash("read failed"); return; }
+
+        // Route through the normal model path so wear-race changes etc. keep working: the opened "DAT"
+        // is the first clip DAT; _extraClipDats carries the full set to merge onto the body.
+        _lastData = animDats[0];
+        _lastChunks = ChunkReader.Walk(animDats[0]);
+        _extraClipDats = animDats;
+        _prefClipName = _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
+        for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == raceId) _raceOpt.Selected = i;
+        _wearChk.ButtonPressed = true;
+
+        PopulateTextures(_lastData, _lastChunks);
+        PopulateChunks(_lastChunks);
+        PopulateHex(_lastData);
+        BuildModelView();
+        _tabs.CurrentTab = 1; // Model tab
+
+        _info.Clear();
+        _info.AppendText($"[color=#e8c877]animation:[/color] [b]{e.Label}[/b]   ·   {raceLabel}   ·   {abs.Count} DAT(s)   ·   ref {e.RefToken}");
     }
 
     private bool EntryExists(LibEntry e)
@@ -1125,6 +1265,7 @@ public partial class Main : Control
         int fileId = _pathToId.TryGetValue(path, out var fid) ? fid : -1;
 
         _lastData = data;
+        _extraClipDats = null; _prefClipName = null; // opening a real DAT clears Animation-tab state
         var chunks = ChunkReader.Walk(data);
         _lastChunks = chunks;
         int nTex = chunks.Count(c => c.Type == 0x20);
@@ -1202,6 +1343,9 @@ public partial class Main : Control
         // wear controls only matter for equipment parts
         _wearChk.Disabled = _raceOpt.Disabled = _slotOpt.Disabled = !isPart;
 
+        // Explicit clip DATs from the Animation tab → always assemble-on-body with them.
+        if (_extraClipDats is not null && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
+
         if (!isPart)
         {
             ShowCharacter(self!, $"character model · {self!.BoneCount} bones · clips: {string.Join(", ", self.ClipNames.Take(8))}");
@@ -1233,12 +1377,13 @@ public partial class Main : Control
         var parts = new List<byte[]>();
         foreach (var (_, path) in rec.parts) { try { parts.Add(File.ReadAllBytes(path)); } catch { } }
 
+        var clipDats = _extraClipDats ?? new List<byte[]> { _lastData! };
         Vellichor.Render.CharacterModel? cm = null;
-        try { cm = Vellichor.Render.CharacterModel.DecodeAssembled(skel, parts, clipDats: new[] { _lastData! }); }
+        try { cm = Vellichor.Render.CharacterModel.DecodeAssembled(skel, parts, clipDats: clipDats); }
         catch (Exception e) { GD.Print("anim assemble failed: " + e.Message); }
         if (cm is null || cm.BoneCount == 0) { _modelInfo.Text = "  (could not apply this animation to a body)"; return false; }
 
-        string? pref = _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
+        string? pref = _prefClipName ?? _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
         ShowCharacter(cm, $"animation on {_raceOpt.GetItemText(_raceOpt.Selected)} · {cm.ClipNames.Count} clips", pref);
         return true;
     }

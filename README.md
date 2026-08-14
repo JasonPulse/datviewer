@@ -80,6 +80,8 @@ race/slot, so it renders worn.
 - **Open .DAT…** — open any file, including user-made mod DATs (no file id needed). Remembers the
   last folder you browsed (saved to `user://settings.cfg`) and reopens there next time.
 - **Library** tab — browse models/art by name (PC/NPC/Effect/…); search filters the current list.
+- **Animation** tab — pick a **Race**, then a named **action** (Battle, Emote, Ability, …) and it plays
+  on that race's body in the Model tab.
 - **Music** tab — browse and play music tracks by expansion.
 - **ROM Tree** tab — raw folder browsing + the **file id** jump box.
 
