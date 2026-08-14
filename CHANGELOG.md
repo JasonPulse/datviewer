@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/JasonPulse/datviewer/compare/v1.3.0...v1.4.0) (2026-08-14)
+
+
+### Features
+
+* Animation tab — browse and play named actions per race ([ddbcce0](https://github.com/JasonPulse/datviewer/commit/ddbcce016679cc2046441f0ad15c5dafd259c846))
+
 # [1.3.0](https://github.com/JasonPulse/datviewer/compare/v1.2.2...v1.3.0) (2026-08-14)
 
 
