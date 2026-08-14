@@ -86,6 +86,9 @@ jobs:
       - name: Build C# + import
         run: |
           dotnet build DatViewer.csproj -c ExportRelease
+          # Import twice: on a fresh checkout the first pass doesn't resolve the C# script link, so
+          # the scene (Main.scn) isn't generated and the export packs an empty pck (grey-screen app).
+          godot --headless --import . || true
           godot --headless --import . || true
       - name: Export
         run: |
