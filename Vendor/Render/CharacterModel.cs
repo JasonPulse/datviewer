@@ -49,7 +49,10 @@ public sealed class CharacterModel
     /// Assemble a PC / humanoid-NPC model: a race SKELETON DAT (0x29 + base 0x2b anims, no mesh) plus one
     /// or more PART DATs (equipment/face; 0x2a mesh only) whose meshes bind to the shared race skeleton.
     /// Extra animation clips (walk/run from separate race anim DATs) can be merged via <paramref name="clipDats"/>.
-    public static CharacterModel? DecodeAssembled(byte[] skeletonDat, IReadOnlyList<byte[]> partDats, IReadOnlyList<byte[]>? clipDats = null)
+    /// <param name="forceBones">optional, parallel to <paramref name="partDats"/>: if entry &gt;= 0, ALL of that
+    /// part's vertices bind to that single bone (used to hang rigid weapon meshes off the hand grip bone).</param>
+    public static CharacterModel? DecodeAssembled(byte[] skeletonDat, IReadOnlyList<byte[]> partDats,
+        IReadOnlyList<byte[]>? clipDats = null, IReadOnlyList<int>? forceBones = null)
     {
         ModelDecoder.Skeleton? sk = null;
         var clips = new Dictionary<string, byte[]>();
@@ -70,7 +73,8 @@ public sealed class CharacterModel
         for (int pi = 0; pi < partDats.Count; pi++)
         {
             int before = meshes.Count, tris = 0;
-            try { var pm = ModelDecoder.DecodeMeshesWithSkeleton(partDats[pi], sk); meshes.AddRange(pm); foreach (var m in pm) tris += m.TriangleCount; }
+            int forceBone = forceBones is not null && pi < forceBones.Count ? forceBones[pi] : -1;
+            try { var pm = ModelDecoder.DecodeMeshesWithSkeleton(partDats[pi], sk, forceBone); meshes.AddRange(pm); foreach (var m in pm) tris += m.TriangleCount; }
             catch (Exception e) { diag.Append($"\n  part{pi}: EXCEPTION {e.GetType().Name} ({ModelDecoder.MeshDiag.Trim()})"); continue; }
             diag.Append($"\n  part{pi}: {meshes.Count - before} mesh(es), {tris} tris  [{ModelDecoder.MeshDiag.Trim()}]");
         }

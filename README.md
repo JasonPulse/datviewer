@@ -37,9 +37,9 @@ Two jobs:
        to see the bare garment mesh; objects fall back to a raw MMB mesh view.
      - **Animation** — models with `0x2b` clips get a transport bar: pick a **clip**, play/pause, toggle
        loop, change speed, and scrub the timeline (frame N/total). A standalone **animation DAT** (clips
-       only, no mesh) is applied to the chosen race's body so the motion can be previewed.
-       *(Spell/ability visual effects are not yet decodable by the underlying FFXI client, so they are
-       out of scope here until that support lands.)*
+       only, no mesh) is applied to the chosen race's body and plays its own clips.
+     - **Spell effect** — an effect DAT (`0x05` particle generators) plays its particle effect
+       (decoded via Vellichor's `EffectDecoder` + `EffectPlayer`) drawing the effect's own sprites.
    - **Chunks** — the chunk list with names, decoded types, and sizes.
    - **Hex** — a raw hex/ASCII dump.
    - **Music** — a dedicated top-level tab: pick a **Set** (sound folder / expansion), search, and

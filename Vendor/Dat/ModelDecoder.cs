@@ -13,6 +13,8 @@ namespace Vellichor.Dat;
 public static class ModelDecoder
 {
     public static string MeshDiag = "";
+    /// When set, DecodeOne2A appends per-part bone-table / used-bones / bbox detail to MeshDiag (debugging).
+    public static bool VerboseDiag = false;
     /// FFXI two-pass mirror: symmetric parts (flip flag @0x04 set) render a 2nd pass using the RIGHT bone
     /// field + a reflection on the flg axis. Ref: galkareeve/ffxi TDWCharacter.cpp buildBindPosVertex.
     public static bool MirrorEnabled = true;
@@ -114,10 +116,11 @@ public static class ModelDecoder
     /// Decode the 0x2a meshes in an EQUIPMENT/part DAT (which has NO embedded 0x29) against a SEPARATE
     /// race skeleton — the FFXI PC-assembly model: a race skeleton DAT + per-slot equipment/face mesh
     /// DATs all skinned to the shared bones. Bone refs in the part index into the race skeleton.
-    public static List<MeshData> DecodeMeshesWithSkeleton(byte[] partDat, Skeleton raceSkeleton)
-        => DecodeMeshesWithBind(partDat, BindMatrices(raceSkeleton));
+    /// <param name="forceBone">if &gt;= 0, bind ALL vertices to this one bone (rigid weapon → hand grip).</param>
+    public static List<MeshData> DecodeMeshesWithSkeleton(byte[] partDat, Skeleton raceSkeleton, int forceBone = -1)
+        => DecodeMeshesWithBind(partDat, BindMatrices(raceSkeleton), forceBone);
 
-    static List<MeshData> DecodeMeshesWithBind(byte[] dat, System.Numerics.Matrix4x4[] bind)
+    static List<MeshData> DecodeMeshesWithBind(byte[] dat, System.Numerics.Matrix4x4[] bind, int forceBone = -1)
     {
         var result = new List<MeshData>();
         var chunks = ChunkReader.Walk(dat);
@@ -129,7 +132,7 @@ public static class ModelDecoder
             n2a++;
             var pl = dat.AsSpan(c.PayloadOffset, c.PayloadLength).ToArray();
             ushort ty = pl.Length >= 6 ? U16(pl, 0x02) : (ushort)0;
-            try { DecodeOne2A(pl, bind, result); }
+            try { DecodeOne2A(pl, bind, result, forceBone); }
             catch (Exception ex) { MeshDiag += $"\n         part{n2a} type=0x{ty:x4} ERR {ex.GetType().Name}"; }
         }
         MeshDiag = $"{n2a} 0x2a part(s)" + MeshDiag;
@@ -261,7 +264,7 @@ public static class ModelDecoder
         };
     }
 
-    static void DecodeOne2A(byte[] p, System.Numerics.Matrix4x4[] bind, List<MeshData> outMeshes)
+    static void DecodeOne2A(byte[] p, System.Numerics.Matrix4x4[] bind, List<MeshData> outMeshes, int forceBone = -1)
     {
         if (p.Length < 0x40) return;
         ushort type = U16(p, 0x02);
@@ -300,8 +303,11 @@ public static class ModelDecoder
 
         int boneRaw(int vtx, int corner) { int bo = offBone + (vtx * 2 + corner) * 2; return bo + 2 <= p.Length ? U16(p, bo) : 0; }
         int resolve(int idx) { if (indirect) { int to = offBoneTbl + idx * 2; idx = (to + 2 <= p.Length && idx < boneTblSuu) ? U16(p, to) : 0; } return idx >= 0 && idx < bind.Length ? idx : 0; }
-        int boneId(int vtx, int corner) => resolve(boneRaw(vtx, corner) & 0x7f);          // LEFT field (normal pass)
-        int boneIdR(int vtx, int corner) => resolve((boneRaw(vtx, corner) >> 7) & 0x7f);  // RIGHT field (mirror pass)
+        // forceBone (>=0): rigid weapon — every vertex binds to that one bone (the hand grip), ignoring the
+        // part's own bone table (which points at a root bone and would drop the weapon at the feet).
+        bool forced = forceBone >= 0 && forceBone < bind.Length;
+        int boneId(int vtx, int corner) => forced ? forceBone : resolve(boneRaw(vtx, corner) & 0x7f);          // LEFT (normal)
+        int boneIdR(int vtx, int corner) => forced ? forceBone : resolve((boneRaw(vtx, corner) >> 7) & 0x7f);  // RIGHT (mirror)
         int boneFlg(int vtx, int corner) => (boneRaw(vtx, corner) >> 14) & 0x3;
         System.Numerics.Vector3 Mir(System.Numerics.Vector3 v, int flg) =>
             flg == 1 ? new System.Numerics.Vector3(-v.X, v.Y, v.Z)
@@ -448,6 +454,17 @@ public static class ModelDecoder
             else { termWf = wf; break; } // unknown token before the section end = malformed; stop
         }
         MeshDiag += $"\n         part type=0x{type:x4} T={nT} ST={nST} verts={nverts}(r{weight1}/b{weight2}) flip={flip}";
+        if (VerboseDiag)
+        {
+            var used = new System.Collections.Generic.SortedSet<int>();
+            for (int i = 0; i < nverts; i++) { used.Add(boneId(i, 0)); if (i >= weight1) used.Add(boneId(i, 1)); }
+            var tbl = new System.Collections.Generic.List<int>();
+            for (int t = 0; t < boneTblSuu && offBoneTbl + t * 2 + 2 <= p.Length; t++) tbl.Add(U16(p, offBoneTbl + t * 2));
+            float xmn = 1e9f, xmx = -1e9f, ymn = 1e9f, ymx = -1e9f, zmn = 1e9f, zmx = -1e9f;
+            foreach (var (_, a) in acc) for (int i = 0; i + 2 < a.pos.Count; i += 3)
+            { float x = a.pos[i], y = a.pos[i + 1], z = a.pos[i + 2]; if (x < xmn) xmn = x; if (x > xmx) xmx = x; if (y < ymn) ymn = y; if (y > ymx) ymx = y; if (z < zmn) zmn = z; if (z > zmx) zmx = z; }
+            MeshDiag += $"\n           indirect={indirect} boneTblSuu={boneTblSuu} usedBones=[{string.Join(",", used)}] boneTbl=[{string.Join(",", tbl)}] bbox X[{xmn:0.0},{xmx:0.0}] Y[{ymn:0.0},{ymx:0.0}] Z[{zmn:0.0},{zmx:0.0}]";
+        }
 
         foreach (var (tex, a) in acc)
             if (a.pos.Count > 0)

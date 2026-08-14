@@ -7,8 +7,8 @@ here — fix them in Vellichor and re-copy.
 
 | here | source (in `../Vellichor`) |
 |------|----------------------------|
-| `Dat/*.cs` | `Vellichor.Dat/*.cs` — pure FFXI DAT decoders (FTABLE/VTABLE, chunks, IMG, MMB, models, skeletons) |
-| `Render/CharacterModel.cs` etc. (4 files) | `Render/{CharacterModel,SkinnedMeshBuilder,AnimationDriver,ModelResolver}.cs` — Godot-typed posed/skinned build |
+| `Dat/*.cs` | `Vellichor.Dat/*.cs` — pure FFXI DAT decoders (FTABLE/VTABLE, chunks, IMG, MMB, models, skeletons, **EffectDecoder** for spell effects) |
+| `Render/*.cs` (6 files) | `Render/{CharacterModel,SkinnedMeshBuilder,AnimationDriver,ModelResolver,EffectFx,EffectPlayer}.cs` — Godot-typed posed/skinned build + particle effect player |
 | `XiProtocol/EntityLook.cs` | the single `EntityLook` struct from `XiProtocol/vendor/Game/WorldState.cs` |
 
 ## Resync
@@ -17,7 +17,8 @@ here — fix them in Vellichor and re-copy.
 V=../../Vellichor          # a Vellichor checkout
 cp $V/Vellichor.Dat/*.cs Dat/
 cp $V/Render/CharacterModel.cs $V/Render/SkinnedMeshBuilder.cs \
-   $V/Render/AnimationDriver.cs $V/Render/ModelResolver.cs Render/
+   $V/Render/AnimationDriver.cs $V/Render/ModelResolver.cs \
+   $V/Render/EffectFx.cs $V/Render/EffectPlayer.cs Render/
 # EntityLook.cs: hand-check against XiProtocol/vendor/Game/WorldState.cs (struct EntityLook)
 ```
 

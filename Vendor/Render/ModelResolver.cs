@@ -71,7 +71,16 @@ public sealed class ModelResolver
     /// PC / humanoid NPC (look type 1): the race skeleton DAT + the ordered list of part DATs (face +
     /// visible armor slots + weapons), each resolved to an absolute path. Unequipped visible armor uses
     /// model 0 (the naked body part). Returns null if the race/skeleton is unknown.
-    public (string skeleton, List<string> parts)? PcRecipe(in EntityLook look)
+    // Grip bone per race for attaching WEAPONS (which are rigid meshes that otherwise skin to a root bone at
+    // the origin and end up at the feet). +Z hand = main (right), -Z hand = sub (left). Found by dumping each
+    // skeleton's bind pose (the palm = upper-body, laterally-offset, finger-rich bone). See ffxi-model notes.
+    private static readonly Dictionary<int, (int main, int sub)> HandBones = new()
+    {
+        [1] = (80, 66), [2] = (47, 62), [3] = (61, 47), [4] = (88, 74),
+        [5] = (20, 34), [6] = (20, 34), [7] = (58, 73), [8] = (68, 55),
+    };
+
+    public (string skeleton, List<string> parts, List<int> forceBones)? PcRecipe(in EntityLook look)
     {
         if (_model is null || !Skeleton.TryGetValue(look.Race, out var skelRel)) return null;
         var skel = Abs(skelRel);
@@ -79,7 +88,11 @@ public sealed class ModelResolver
 
         int race = look.Race == 6 ? 6 : look.Race; // race 6 uses race-5 model data but its own key exists
         var parts = new List<string>();
-        void Add(string? p) { if (p is not null) parts.Add(p); }
+        var forceBones = new List<int>();
+        // forceBone: a weapon is rigid, so bind ALL its verts to the hand grip bone (else it collapses to the
+        // feet). -1 = normal skinned part.
+        void Add(string? p, int forceBone = -1) { if (p is not null) { parts.Add(p); forceBones.Add(forceBone); } }
+        (int mainHand, int subHand) = HandBones.TryGetValue(look.Race, out var hb) ? hb : (-1, -1);
 
         // Face (index by the Face byte; table is 1-based F1A.. so clamp into range).
         if (_face is not null && _face.TryGetValue(look.Race, out var faces) && faces.Count > 0)
@@ -92,11 +105,11 @@ public sealed class ModelResolver
         Add(EquipPath(race, SlotHands, look.Hands & 0x0FFF));
         Add(EquipPath(race, SlotLegs, look.Legs & 0x0FFF));
         Add(EquipPath(race, SlotFeet, look.Feet & 0x0FFF));
-        Add(EquipPath(race, SlotMain, look.Main & 0x0FFF));
-        Add(EquipPath(race, SlotSub, look.Sub & 0x0FFF));
-        Add(EquipPath(race, SlotRanged, look.Ranged & 0x0FFF));
+        Add(EquipPath(race, SlotMain, look.Main & 0x0FFF), mainHand);       // right hand
+        Add(EquipPath(race, SlotSub, look.Sub & 0x0FFF), subHand);         // left hand
+        Add(EquipPath(race, SlotRanged, look.Ranged & 0x0FFF), mainHand);  // ranged: main hand for now
 
-        return parts.Count > 0 ? (skel, parts) : null;
+        return parts.Count > 0 ? (skel, parts, forceBones) : null;
     }
 
     /// The NAKED base body of a race as labeled (slot → DAT path) parts + the skeleton DAT — so a tool

@@ -57,13 +57,16 @@ public partial class AnimationDriver : Node
 
     /// <param name="fps">frames per second the animation plays at (from the 0x2b frameSpeed).</param>
     /// <param name="numFrames">total frame count; duration = numFrames / fps.</param>
-    public void Setup(Skeleton3D skel, IEnumerable<Track> tracks, int numFrames, float fps)
+    /// <param name="resetClock">restart from frame 0. Default false so SWITCHING clips (idle&lt;-&gt;walk) keeps
+    /// the animation advancing — resetting every switch froze motion at frame 0 (the "gliding" bug) when a
+    /// clip flickered between discrete server position updates.</param>
+    public void Setup(Skeleton3D skel, IEnumerable<Track> tracks, int numFrames, float fps, bool resetClock = false)
     {
         _skel = skel;
         _tracks = new List<Track>(tracks).ToArray();
         float f = fps > 0.01f ? fps : 30f;
         _duration = numFrames > 0 ? numFrames / f : 0f;
-        _clock = 0;
+        if (resetClock || _clock > _duration) _clock = 0;
     }
 
     /// Jump to an absolute time (seconds) and apply immediately — useful for offscreen frame captures.

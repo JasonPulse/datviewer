@@ -1295,7 +1295,9 @@ public partial class Main : Control
         int nMesh = chunks.Count(c => c.Type == 0x2a);
         int nBone = chunks.Count(c => c.Type == 0x29);
         int nSkel = chunks.Count(c => c.Type == 0x2b);
-        string kind = nMesh > 0 || nSkel > 0 ? "model" : nTex > 0 ? "texture set"
+        int nGen = chunks.Count(c => c.Type == 0x05);
+        string kind = nGen > 0 ? "spell effect" : nMesh > 0 || nBone > 0 ? "model"
+            : nSkel > 0 ? "animation" : nTex > 0 ? "texture set"
             : chunks.Count == 0 ? "data / non-chunked" : "mixed / other";
 
         _info.Clear();
@@ -1375,6 +1377,9 @@ public partial class Main : Control
             return;
         }
 
+        // A spell/ability EFFECT DAT (0x05 particle generators) — play its particle effect.
+        if (_lastChunks.Any(c => c.Type == 0x05) && TryShowEffect()) return;
+
         // An animation-only DAT (0x2b clips, no skeleton/mesh) — play it on the chosen race's body.
         int n29 = _lastChunks.Count(c => c.Type == 0x29);
         int n2a = _lastChunks.Count(c => c.Type == 0x2a);
@@ -1385,6 +1390,25 @@ public partial class Main : Control
         if (_wearChk.ButtonPressed && _resolver?.Ready == true && TryWearOnBody()) return;
 
         ShowRawMeshes();
+    }
+
+    /// A spell/ability effect DAT → decode (Vellichor.Dat.EffectDecoder) and play its particle effect
+    /// (Vellichor.Render.EffectPlayer). No skeleton/mesh, so the wear/anim controls stay hidden.
+    private bool TryShowEffect()
+    {
+        Vellichor.Dat.EffectData? eff = null;
+        try { eff = Vellichor.Dat.EffectDecoder.Decode(_lastData!); }
+        catch (Exception e) { GD.Print("effect decode failed: " + e.Message); }
+        if (eff is null || eff.IsEmpty) return false;
+
+        Node3D fx;
+        try { fx = Vellichor.Render.EffectPlayer.Build(eff, 1f); }
+        catch (Exception e) { GD.Print("effect build failed: " + e.Message); return false; }
+        _modelRoot.AddChild(fx);
+        _wearChk.Disabled = _raceOpt.Disabled = _slotOpt.Disabled = true;
+        _modelInfo.Text = $"  spell effect · {eff.Diag}   (drag to orbit · wheel to zoom)";
+        FrameCamera(new Aabb(new Vector3(-1.5f, -1.5f, -1.5f), new Vector3(3, 3, 3))); // effects have no mesh AABB
+        return true;
     }
 
     /// A standalone animation DAT (0x2b clips only) → assemble the chosen race's naked body and merge
@@ -1406,7 +1430,15 @@ public partial class Main : Control
         catch (Exception e) { GD.Print("anim assemble failed: " + e.Message); }
         if (cm is null || cm.BoneCount == 0) { _modelInfo.Text = "  (could not apply this animation to a body)"; return false; }
 
-        string? pref = _prefClipName ?? _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
+        // Restrict the dropdown to the OPENED animation's own clips (so a raw-opened anim DAT plays its
+        // clip instead of defaulting to a base-body idle/combat clip). The Animation tab pre-sets these.
+        var animClips = clipDats
+            .SelectMany(d => ChunkReader.Walk(d).Where(c => c.Type == 0x2b).Select(c => c.Name))
+            .Distinct().ToList();
+        _restrictClips ??= animClips.Count > 0 ? animClips : null;
+        _prefClipName ??= animClips.FirstOrDefault();
+
+        string? pref = _prefClipName;
         int shownClips = _restrictClips is { Count: > 0 } ? cm.ClipNames.Count(_restrictClips.Contains) : cm.ClipNames.Count;
         ShowCharacter(cm, $"animation on {_raceOpt.GetItemText(_raceOpt.Selected)} · {shownClips} clip(s)", pref);
         return true;
@@ -1558,10 +1590,18 @@ public partial class Main : Control
         FrameCamera(aabb);
     }
 
+    private static bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
+
     private void FrameCamera(Aabb bounds)
     {
-        _focus = bounds.GetCenter();
-        _dist = MathF.Max(0.5f, bounds.Size.Length() * 0.5f) * 2.6f;
+        var center = bounds.GetCenter();
+        float ext = bounds.Size.Length();
+        // Degenerate/empty geometry (e.g. an effect DAT with no mesh) yields NaN/zero bounds — fall back
+        // to a sane default box so the camera never gets non-finite vectors (LookAt would crash).
+        if (!Finite(center) || !float.IsFinite(ext)) { center = Vector3.Zero; ext = 2f; }
+        _focus = center;
+        _dist = MathF.Max(0.5f, ext * 0.5f) * 2.6f;
+        if (!float.IsFinite(_dist) || _dist < 0.1f) _dist = 4f;
         // Default to a FRONT view (character facing the user). +90° showed the BACK, so the front camera is
         // at −90°. Slight downward pitch for a natural character-viewer shot.
         _yaw = -Mathf.Pi / 2; _pitch = 0.12f;
@@ -1657,8 +1697,13 @@ public partial class Main : Control
         if (_cam is null) return;
         float cp = Mathf.Cos(_pitch);
         var offset = new Vector3(Mathf.Sin(_yaw) * cp, Mathf.Sin(_pitch), Mathf.Cos(_yaw) * cp) * _dist;
-        _cam.Position = _focus + offset;
-        _cam.LookAt(_focus, Vector3.Up);
+        // Only aim the camera when the vectors are finite and the eye isn't sitting on the focus point,
+        // else LookAt spams "cannot be normalized / colinear" (degenerate bounds from effect/empty DATs).
+        if (Finite(_focus) && Finite(offset) && offset.LengthSquared() > 1e-5f)
+        {
+            _cam.Position = _focus + offset;
+            _cam.LookAt(_focus, Vector3.Up);
+        }
 
         // advance the animation (we own the clock; the driver just poses at the time we Seek to)
         if (_animDriver is not null && _animDuration > 0)
