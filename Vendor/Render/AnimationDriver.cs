@@ -48,8 +48,10 @@ public partial class AnimationDriver : Node
     }
 
     private Skeleton3D _skel = null!;
-    private Track[] _tracks = System.Array.Empty<Track>();
-    private float _duration;         // seconds
+    private Track[] _tracks = System.Array.Empty<Track>();   // base layer (FFXI lower-body "...0" clip)
+    private float _duration;         // seconds (base layer)
+    private Track[] _overlay = System.Array.Empty<Track>();  // overlay layer (FFXI upper-body "...1" clip)
+    private float _overlayDuration;  // seconds (overlay layer)
     private double _clock;           // seconds since anim start
     public bool Loop { get; set; } = true;
     public float Speed { get; set; } = 1f;
@@ -66,40 +68,66 @@ public partial class AnimationDriver : Node
         _tracks = new List<Track>(tracks).ToArray();
         float f = fps > 0.01f ? fps : 30f;
         _duration = numFrames > 0 ? numFrames / f : 0f;
-        if (resetClock || _clock > _duration) _clock = 0;
+        if (resetClock || _clock > Master) _clock = 0;
     }
+
+    /// Overlay a second clip on top of the base layer. FFXI splits each motion into a lower-body ("...0")
+    /// and an upper-body ("...1") clip that play SIMULTANEOUSLY — a standing cast is idle-legs + cast-arms.
+    /// The two clips animate near-disjoint bone sets (legs+spine vs arms+torso), and the overlay is applied
+    /// after the base, so it wins on any shared bone. Call with an empty list / ClearOverlay to remove it.
+    /// This is the fix for "a combat/cast clip only animates half the body" — that clip is the upper half.
+    public void SetOverlay(IEnumerable<Track> tracks, int numFrames, float fps)
+    {
+        _overlay = new List<Track>(tracks).ToArray();
+        float f = fps > 0.01f ? fps : 30f;
+        _overlayDuration = numFrames > 0 ? numFrames / f : 0f;
+    }
+
+    public void ClearOverlay() { _overlay = System.Array.Empty<Track>(); _overlayDuration = 0f; }
+
+    /// Longest layer duration — the master loop length so both layers cycle without truncation.
+    private float Master => Mathf.Max(_duration, _overlayDuration);
 
     /// Jump to an absolute time (seconds) and apply immediately — useful for offscreen frame captures.
     public void Seek(float seconds) { _clock = seconds; Apply((float)_clock); }
 
     public override void _Process(double delta)
     {
-        if (!Playing || _skel is null || _duration <= 0f) return;
+        if (!Playing || _skel is null || Master <= 0f) return;
         _clock += delta * Speed;
-        if (_clock >= _duration)
+        if (_clock >= Master)
         {
-            if (Loop) _clock = Mathf.PosMod((float)_clock, _duration);
-            else { _clock = _duration; Playing = false; }
+            if (Loop) _clock = Mathf.PosMod((float)_clock, Master);
+            else { _clock = Master; Playing = false; }
         }
         Apply((float)_clock);
     }
 
     private void Apply(float t)
     {
-        foreach (var tr in _tracks)
+        ApplyLayer(_tracks, _duration, t);
+        if (_overlay.Length > 0) ApplyLayer(_overlay, _overlayDuration, t);   // overlay wins on shared bones
+    }
+
+    /// Apply one layer's tracks at master time <paramref name="t"/>, wrapped to the layer's own duration so
+    /// a short upper clip can loop several times over a longer lower clip (and vice-versa).
+    private void ApplyLayer(Track[] tracks, float duration, float t)
+    {
+        float lt = duration > 1e-5f ? (Loop ? Mathf.PosMod(t, duration) : Mathf.Min(t, duration)) : t;
+        foreach (var tr in tracks)
         {
             var keys = tr.Keys;
             if (keys.Length == 0 || tr.Bone < 0 || tr.Bone >= _skel.GetBoneCount()) continue;
             if (keys.Length == 1) { ApplyKey(tr.Bone, keys[0].Rot, keys[0].Pos); continue; }
 
-            // find the segment [a,b] containing t (keys sorted by Time); clamp at the ends
+            // find the segment [a,b] containing lt (keys sorted by Time); clamp at the ends
             int a = 0;
-            while (a < keys.Length - 1 && keys[a + 1].Time <= t) a++;
+            while (a < keys.Length - 1 && keys[a + 1].Time <= lt) a++;
             int b = System.Math.Min(a + 1, keys.Length - 1);
             var ka = keys[a];
             var kb = keys[b];
             float span = kb.Time - ka.Time;
-            float u = span > 1e-5f ? Mathf.Clamp((t - ka.Time) / span, 0f, 1f) : 0f;
+            float u = span > 1e-5f ? Mathf.Clamp((lt - ka.Time) / span, 0f, 1f) : 0f;
 
             var rot = ka.Rot.Slerp(kb.Rot, u);
             Vector3? pos = null;

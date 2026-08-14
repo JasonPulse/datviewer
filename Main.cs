@@ -1513,12 +1513,37 @@ public partial class Main : Control
     {
         if (_animCm is null || _animDriver is null || _animSkel is null || _clipOpt.Selected < 0) return;
         string name = _clipOpt.GetItemText(_clipOpt.Selected);
-        if (_animCm.Clip(name) is not { } cc) { _animTime.Text = "(undecodable)"; return; }
-        _animDriver.Setup(_animSkel, cc.tracks, cc.frames, cc.fps);
+
+        // FFXI splits each motion into a lower-body ("...0", legs+spine) and upper-body ("...1", arms+torso)
+        // clip that play SIMULTANEOUSLY. Base = lower half, overlay = upper half, so the WHOLE body animates
+        // — otherwise a combat/cast clip (the upper half) leaves the legs in the splayed rest pose.
+        var (lo, up) = _animCm.MotionHalves(name);
+        string baseName = lo ?? name;
+        string? overlayName = up is not null && up != baseName ? up : null;
+        // Upper-only clip with no lower sibling (e.g. a lone cast DAT) → stand the legs on an idle lower
+        // and overlay the selected upper, so it doesn't render as a half-body splay.
+        if (lo is null && up == name && _animCm.FindClip("idl0", "std0", "idl", "std", "stnd") is { } idle && idle != name)
+        {
+            baseName = idle;
+            overlayName = name;
+        }
+        if (_animCm.Clip(baseName) is not { } bc) { _animTime.Text = "(undecodable)"; return; }
+        _animDriver.Setup(_animSkel, bc.tracks, bc.frames, bc.fps, resetClock);
+
+        float baseFps = bc.fps > 0.01f ? bc.fps : 30f;
+        float baseDur = bc.frames > 0 ? bc.frames / baseFps : 0f;
+        _animDriver.ClearOverlay();
+        _animDuration = baseDur;
+        if (overlayName is not null && _animCm.Clip(overlayName) is { } uc)
+        {
+            _animDriver.SetOverlay(uc.tracks, uc.frames, uc.fps);
+            float upDur = uc.frames > 0 ? uc.frames / (uc.fps > 0.01f ? uc.fps : 30f) : 0f;
+            _animDuration = Math.Max(baseDur, upDur); // master loop = longest layer
+        }
+
         _animDriver.Playing = false;                 // our _Process drives it via Seek
-        _animFrames = cc.frames;
-        _animFps = cc.fps > 0.01f ? cc.fps : 30f;
-        _animDuration = _animFrames > 0 ? _animFrames / _animFps : 0;
+        _animFps = baseFps;
+        _animFrames = (int)MathF.Ceiling((float)_animDuration * _animFps);
         if (resetClock) _animClock = 0;
         _animPlaying = _animDuration > 0;
         _animPlayBtn.Text = _animPlaying ? "❚❚" : "▶";

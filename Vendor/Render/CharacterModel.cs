@@ -213,6 +213,19 @@ public sealed class CharacterModel
         return null;
     }
 
+    /// The lower ("...0") and upper ("...1") halves of the motion a clip belongs to (either may be null).
+    /// FFXI splits every motion into a lower-body clip (legs+spine, name ends in '0') and an upper-body clip
+    /// (arms+torso, ends in '1') that play SIMULTANEOUSLY; pass the base to <see cref="AnimationDriver.Setup"/>
+    /// and the upper to <see cref="AnimationDriver.SetOverlay"/> to animate the whole body. A locomotion clip
+    /// like "wlk0" has no "wlk1" sibling → upper is null (arms rest, which reads naturally for walking).
+    public (string? lower, string? upper) MotionHalves(string clip)
+    {
+        if (string.IsNullOrEmpty(clip)) return (null, null);
+        string stem = clip[..^1];
+        string lo = stem + "0", up = stem + "1";
+        return (_clipPayloads.ContainsKey(lo) ? lo : null, _clipPayloads.ContainsKey(up) ? up : null);
+    }
+
     /// Skeleton-independent driver tracks for a clip (decoded + cached). Returns (tracks, numFrames, fps)
     /// or null if the clip is missing/undecodable.
     public (AnimationDriver.Track[] tracks, int frames, float fps)? Clip(string name, float fps = 30f)
