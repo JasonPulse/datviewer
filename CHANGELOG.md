@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/JasonPulse/datviewer/compare/v1.4.1...v1.5.0) (2026-08-14)
+
+
+### Features
+
+* spell-effect playback + resync Vellichor (effects/anim), fix effect-DAT crash ([dd2d882](https://github.com/JasonPulse/datviewer/commit/dd2d882cbc1f8726ead202c01b4646d0db3c7a97))
+
 ## [1.4.1](https://github.com/JasonPulse/datviewer/compare/v1.4.0...v1.4.1) (2026-08-14)
 
 
