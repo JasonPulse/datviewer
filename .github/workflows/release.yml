@@ -81,7 +81,7 @@ jobs:
         uses: chickensoft-games/setup-godot@v2
         with:
           version: ${{ env.GODOT_VERSION }}
-          use-dotnet: false
+          use-dotnet: true          # MUST be true — the .NET-enabled Godot; false can't export C# (empty pck → grey screen)
           include-templates: true
       - name: Build C# + import
         run: |
