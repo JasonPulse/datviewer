@@ -39,7 +39,7 @@ Two jobs:
        loop, change speed, and scrub the timeline (frame N/total). A standalone **animation DAT** (clips
        only, no mesh) is applied to the chosen race's body and plays its own clips.
      - **Spell effect** — an effect DAT (`0x05` particle generators) plays its particle effect
-       (decoded via Vellichor's `EffectDecoder` + `EffectPlayer`) drawing the effect's own sprites.
+       (decoded via the vendored `EffectDecoder` + `EffectPlayer`) drawing the effect's own sprites.
    - **Chunks** — the chunk list with names, decoded types, and sizes.
    - **Hex** — a raw hex/ASCII dump.
    - **Music** — a dedicated top-level tab: pick a **Set** (sound folder / expansion), search, and
@@ -48,8 +48,8 @@ Two jobs:
      PS-ADPCM) play; Aht Urhgan and later are ATRAC3 and can't be decoded (same limitation as the
      original Altana Viewer) — those report as unplayable.
 
-All decoding comes from **Vellichor** — its pure-C# decoders and posed-character build are vendored
-under `Vendor/` (see `Vendor/README.md`); Vellichor stays the source of truth.
+All DAT decoding is handled by the vendored pure-C# decoders + posed-character build under `Vendor/`
+(see `Vendor/README.md`) — there is no duplicated decode logic in the viewer itself.
 
 ### The named Library (`List/`)
 
@@ -76,7 +76,7 @@ race/slot, so it renders worn.
 - **⚙ Settings** — point the viewer at your FFXI install (the folder with `ROM/`, `FTABLE.DAT`) and
   set the UI scale. The install path and scale are saved to `user://settings.cfg`. On first run with
   no valid install, Settings opens automatically. Startup order: `$DATVIEWER_ROOT` → saved setting →
-  the bundled `../Vellichor/corpus` (dev only) → onboarding.
+  a sibling `corpus/` checkout (dev only) → onboarding.
 - **Open .DAT…** — open any file, including user-made mod DATs (no file id needed). Remembers the
   last folder you browsed (saved to `user://settings.cfg`) and reopens there next time.
 - **Library** tab — browse models/art by name (PC/NPC/Effect/…); search filters the current list.
@@ -93,8 +93,7 @@ git clone git@github.com:JasonPulse/datviewer.git
 ```
 
 Self-contained — Godot 4.7.1 + .NET 8, no other checkout needed. The FFXI DAT decoders and the
-posed/skinned model build are **vendored** under `Vendor/` (copied from
-[Vellichor](https://github.com/JasonPulse/vellichor); see `Vendor/README.md` to resync).
+posed/skinned model build are **vendored** under `Vendor/` (see `Vendor/README.md`).
 
 The `List/` catalog and `data/models` tables carry a `.gdignore` (Godot never imports/packs them) and
 are read as loose files via an executable-relative path — so they work both from the project tree and
