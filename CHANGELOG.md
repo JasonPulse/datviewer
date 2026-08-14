@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/JasonPulse/datviewer/compare/v1.2.0...v1.2.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* Windows export showed a grey screen — bundle .NET assemblies + import twice ([476dabd](https://github.com/JasonPulse/datviewer/commit/476dabd8e5079b520e619f08379df5b61b8f47be))
+
 # [1.2.0](https://github.com/JasonPulse/datviewer/compare/v1.1.0...v1.2.0) (2026-08-13)
 
 
