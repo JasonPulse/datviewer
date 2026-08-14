@@ -1365,29 +1365,46 @@ public partial class Main : Control
         try { self = Vellichor.Render.CharacterModel.Decode(_lastData); } catch { }
         bool isPart = self is null || self.BoneCount == 0;
 
-        // wear controls only matter for equipment parts
-        _wearChk.Disabled = _raceOpt.Disabled = _slotOpt.Disabled = !isPart;
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_DBG") is not null)
+        {
+            var types = _lastChunks.GroupBy(c => c.Type).OrderBy(g => g.Key).Select(g => $"0x{g.Key:X2}×{g.Count()}");
+            GD.Print($"[dbg] chunks: {string.Join(" ", types)}");
+            GD.Print($"[dbg] self bones={self?.BoneCount} clips=[{(self is null ? "-" : string.Join(",", self.ClipNames))}]");
+            var animNames = _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name);
+            GD.Print($"[dbg] 0x2b chunk names=[{string.Join(",", animNames)}]");
+            if (_lastChunks.Any(c => c.Type == 0x05)) { var e = Vellichor.Dat.EffectDecoder.Decode(_lastData!); GD.Print($"[dbg] effect: {e.Diag} empty={e.IsEmpty}"); }
+        }
+
+        bool hasMesh = _lastChunks.Any(c => c.Type == 0x2a);
+        bool hasClips = _lastChunks.Any(c => c.Type == 0x2b);
+        // A real geometry model (mesh + own skeleton) shows itself; everything else that carries clips is
+        // assembled onto a base body — so enable the race/wear controls for those.
+        bool ownModel = !isPart && hasMesh;
+        _wearChk.Disabled = _raceOpt.Disabled = _slotOpt.Disabled = ownModel;
 
         // Explicit clip DATs from the Animation tab → always assemble-on-body with them.
         if (_extraClipDats is not null && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
 
-        if (!isPart)
+        // A spell/ability EFFECT DAT (0x05 generators) → play its particle effect, IF it renders (some
+        // effect DATs reference external sprites and can't draw; TryShowEffect returns false then, so we
+        // fall through to its animation). Checked before the character branch.
+        if (_lastChunks.Any(c => c.Type == 0x05) && TryShowEffect()) return;
+
+        // Real geometry model (creature / full NPC) → show it posed.
+        if (ownModel)
         {
             ShowCharacter(self!, $"character model · {self!.BoneCount} bones · clips: {string.Join(", ", self.ClipNames.Take(8))}");
             return;
         }
 
-        // A spell/ability EFFECT DAT (0x05 particle generators) — play its particle effect.
-        if (_lastChunks.Any(c => c.Type == 0x05) && TryShowEffect()) return;
+        // Any DAT that carries animation clips but no visible mesh (a pure motion DAT, or a mesh-less
+        // skeleton+clips effect/cast DAT) → play its clips on the chosen race's body so the motion is seen.
+        if (hasClips && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
 
-        // An animation-only DAT (0x2b clips, no skeleton/mesh) — play it on the chosen race's body.
-        int n29 = _lastChunks.Count(c => c.Type == 0x29);
-        int n2a = _lastChunks.Count(c => c.Type == 0x2a);
-        int n2b = _lastChunks.Count(c => c.Type == 0x2b);
-        bool isAnimOnly = n2b > 0 && n29 == 0 && n2a == 0;
-        if (isAnimOnly && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
+        if (isPart && _wearChk.ButtonPressed && _resolver?.Ready == true && TryWearOnBody()) return;
 
-        if (_wearChk.ButtonPressed && _resolver?.Ready == true && TryWearOnBody()) return;
+        // A skeleton with clips but no mesh and no resolver — show the (invisible) skeleton anyway.
+        if (!isPart) { ShowCharacter(self!, $"skeleton · {self!.BoneCount} bones (no mesh)"); return; }
 
         ShowRawMeshes();
     }
@@ -1404,6 +1421,10 @@ public partial class Main : Control
         Node3D fx;
         try { fx = Vellichor.Render.EffectPlayer.Build(eff, 1f); }
         catch (Exception e) { GD.Print("effect build failed: " + e.Message); return false; }
+        // Some effect DATs carry generators but reference their sprites from another DAT (no embedded
+        // 0x20 textures) — EffectPlayer then builds nothing. Don't claim the effect: return false so the
+        // caller falls through to the DAT's animation (e.g. the cast motion), which IS visible.
+        if (fx.GetChildCount() == 0) { fx.QueueFree(); GD.Print($"effect has no embedded sprites ({eff.Diag}) — showing its animation instead"); return false; }
         _modelRoot.AddChild(fx);
         _wearChk.Disabled = _raceOpt.Disabled = _slotOpt.Disabled = true;
         _modelInfo.Text = $"  spell effect · {eff.Diag}   (drag to orbit · wheel to zoom)";
@@ -1436,7 +1457,12 @@ public partial class Main : Control
             .SelectMany(d => ChunkReader.Walk(d).Where(c => c.Type == 0x2b).Select(c => c.Name))
             .Distinct().ToList();
         _restrictClips ??= animClips.Count > 0 ? animClips : null;
-        _prefClipName ??= animClips.FirstOrDefault();
+        // Default to an idle/standing clip rather than whatever happens to be first in the DAT (which is
+        // often a walk) — opening a motion set should show a resting pose, not walk off.
+        _prefClipName ??= animClips.FirstOrDefault(n => n.StartsWith("idl", StringComparison.OrdinalIgnoreCase)
+                                                     || n.StartsWith("std", StringComparison.OrdinalIgnoreCase)
+                                                     || n.StartsWith("sit", StringComparison.OrdinalIgnoreCase))
+                          ?? animClips.FirstOrDefault();
 
         string? pref = _prefClipName;
         int shownClips = _restrictClips is { Count: > 0 } ? cm.ClipNames.Count(_restrictClips.Contains) : cm.ClipNames.Count;
