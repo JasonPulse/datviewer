@@ -693,6 +693,7 @@ public partial class Main : Control
     private List<LibEntry> _actEntries = new();
     private List<byte[]>? _extraClipDats; // clip DATs merged when assembling (set by the Animation tab)
     private string? _prefClipName;        // clip to auto-select after assembling (the opened action)
+    private List<string>? _restrictClips; // if set, the Anim dropdown lists ONLY these clips (the action's own)
 
     private LibCategory? MusicCat => _catalog?.Categories.FirstOrDefault(c => c.Name == "Music");
     private LibCategory? PcCat => _catalog?.Categories.FirstOrDefault(c => c.Name == "PC");
@@ -812,9 +813,27 @@ public partial class Main : Control
             if (e.IsHeader || !EntryExists(e)) continue;
             GD.Print($"[animtest] {race} -> '{e.Label}' ({e.RefToken}) -> {string.Join(", ", e.RomPaths)}");
             PlayAnimationEntry(e, PcRaceId(g.Name), g.Name);
+            AnimDiag(e.Label);
             return;
         }
         GD.Print("[animtest] no loadable action");
+    }
+
+    // Diagnostic: which bones does the selected clip actually animate vs the skeleton (ownership of the
+    // "legs static / torso-only" issue). Coverage lives entirely in Vellichor's decode + AnimationDriver.
+    private void AnimDiag(string action)
+    {
+        if (_animCm is null || _animSkel is null || _clipOpt.Selected < 0) { GD.Print("[animdiag] no model built"); return; }
+        string name = _clipOpt.GetItemText(_clipOpt.Selected);
+        if (_animCm.Clip(name) is not { } cc) { GD.Print($"[animdiag] clip '{name}' undecodable"); return; }
+        int bones = _animSkel.GetBoneCount();
+        var covered = new HashSet<int>();
+        foreach (var t in cc.tracks) if (t.Keys.Length > 0) covered.Add(t.Bone);
+        var uncovered = new List<string>();
+        for (int i = 0; i < bones; i++) if (!covered.Contains(i)) uncovered.Add($"{i}:{_animSkel.GetBoneName(i)}");
+        GD.Print($"[animdiag] dropdown lists {_clipOpt.ItemCount} clip(s) for this action");
+        GD.Print($"[animdiag] action '{action}' clip '{name}': {cc.tracks.Length} tracks, {covered.Count}/{bones} bones animated, {cc.frames} frames");
+        GD.Print($"[animdiag] NOT animated ({uncovered.Count}): {string.Join(", ", uncovered.Take(60))}");
     }
 
     private LibGroup? CurActRace()
@@ -865,7 +884,11 @@ public partial class Main : Control
         _lastData = animDats[0];
         _lastChunks = ChunkReader.Walk(animDats[0]);
         _extraClipDats = animDats;
-        _prefClipName = _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
+        // This action's OWN clips (0x2b names across its DATs) — what the Anim dropdown should list.
+        _restrictClips = animDats
+            .SelectMany(d => ChunkReader.Walk(d).Where(c => c.Type == 0x2b).Select(c => c.Name))
+            .Distinct().ToList();
+        _prefClipName = _restrictClips.FirstOrDefault();
         for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == raceId) _raceOpt.Selected = i;
         _wearChk.ButtonPressed = true;
 
@@ -1265,7 +1288,7 @@ public partial class Main : Control
         int fileId = _pathToId.TryGetValue(path, out var fid) ? fid : -1;
 
         _lastData = data;
-        _extraClipDats = null; _prefClipName = null; // opening a real DAT clears Animation-tab state
+        _extraClipDats = null; _prefClipName = null; _restrictClips = null; // opening a real DAT clears Animation-tab state
         var chunks = ChunkReader.Walk(data);
         _lastChunks = chunks;
         int nTex = chunks.Count(c => c.Type == 0x20);
@@ -1384,7 +1407,8 @@ public partial class Main : Control
         if (cm is null || cm.BoneCount == 0) { _modelInfo.Text = "  (could not apply this animation to a body)"; return false; }
 
         string? pref = _prefClipName ?? _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
-        ShowCharacter(cm, $"animation on {_raceOpt.GetItemText(_raceOpt.Selected)} · {cm.ClipNames.Count} clips", pref);
+        int shownClips = _restrictClips is { Count: > 0 } ? cm.ClipNames.Count(_restrictClips.Contains) : cm.ClipNames.Count;
+        ShowCharacter(cm, $"animation on {_raceOpt.GetItemText(_raceOpt.Selected)} · {shownClips} clip(s)", pref);
         return true;
     }
 
@@ -1427,7 +1451,11 @@ public partial class Main : Control
         // clip to look natural. Wire the driver + clip picker so any clip can be played/scrubbed.
         _animCm = cm;
         _animSkel = skel;
-        var clips = cm.ClipNames.ToList();
+        // When shown from the Animation tab, list ONLY the selected action's own clips (not the ~195
+        // clips the assembled base body also carries). Otherwise (creature / worn) list them all.
+        var clips = _restrictClips is { Count: > 0 }
+            ? cm.ClipNames.Where(_restrictClips.Contains).ToList()
+            : cm.ClipNames.ToList();
         _clipOpt.Clear();
         foreach (var n in clips) _clipOpt.AddItem(n);
         _animRow.Visible = clips.Count > 0;
