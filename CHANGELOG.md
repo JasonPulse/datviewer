@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/JasonPulse/datviewer/compare/v1.5.0...v1.5.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* layer FFXI two-half motions so the whole body animates ([b330e68](https://github.com/JasonPulse/datviewer/commit/b330e68189759a6526d5564ec727a058ad26f740))
+
 # [1.5.0](https://github.com/JasonPulse/datviewer/compare/v1.4.1...v1.5.0) (2026-08-14)
 
 
