@@ -75,6 +75,22 @@ public partial class Main : Control
     private double _musicLenSec;
     private bool _musicSeekProgrammatic;
 
+    // animation playback (Model tab) — drives Vellichor's AnimationDriver from our own clock so the
+    // clip/play/pause/speed/scrub controls all read consistently (the driver just poses at a time T).
+    private Vellichor.Render.CharacterModel? _animCm;
+    private Vellichor.Render.AnimationDriver? _animDriver;
+    private Skeleton3D? _animSkel;
+    private Control _animRow = null!;
+    private OptionButton _clipOpt = null!;
+    private Button _animPlayBtn = null!;
+    private CheckBox _animLoopChk = null!;
+    private HSlider _animSpeedSld = null!, _animSeek = null!;
+    private Label _animTime = null!;
+    private double _animClock, _animDuration;
+    private int _animFrames;
+    private float _animFps = 30f, _animSpeed = 1f;
+    private bool _animPlaying, _animScrubbing, _animSeekProg;
+
     // 3d preview
     private SubViewport _viewport = null!;
     private Camera3D _cam = null!;
@@ -285,6 +301,38 @@ public partial class Main : Control
         _slotOpt.ItemSelected += _ => BuildModelView();
         wearRow.AddChild(_slotOpt);
         modelBox.AddChild(wearRow);
+
+        // animation controls — clip picker + transport (shown only when the model has 0x2b clips)
+        var animRow = new HBoxContainer { Visible = false };
+        animRow.AddThemeConstantOverride("separation", 6);
+        _animRow = animRow;
+        animRow.AddChild(new Label { Text = "Anim:" });
+        _clipOpt = new OptionButton { CustomMinimumSize = new Vector2(150, 0) };
+        _clipOpt.ItemSelected += _ => PlaySelectedClip(resetClock: true);
+        animRow.AddChild(_clipOpt);
+        _animPlayBtn = new Button { Text = "❚❚", CustomMinimumSize = new Vector2(40, 0) };
+        _animPlayBtn.Pressed += ToggleAnim;
+        animRow.AddChild(_animPlayBtn);
+        _animLoopChk = new CheckBox { Text = "loop", ButtonPressed = true };
+        animRow.AddChild(_animLoopChk);
+        animRow.AddChild(new Label { Text = "speed" });
+        _animSpeedSld = new HSlider { MinValue = 0.1, MaxValue = 2, Step = 0.05, Value = 1, CustomMinimumSize = new Vector2(80, 0), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _animSpeedSld.ValueChanged += v => _animSpeed = (float)v;
+        animRow.AddChild(_animSpeedSld);
+        _animSeek = new HSlider { MinValue = 0, MaxValue = 1, Step = 0.001, SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _animSeek.DragStarted += () => _animScrubbing = true;
+        _animSeek.DragEnded += _ => _animScrubbing = false;
+        _animSeek.ValueChanged += v =>
+        {
+            if (_animSeekProg) return;
+            _animClock = v * _animDuration;
+            _animDriver?.Seek((float)_animClock);
+        };
+        animRow.AddChild(_animSeek);
+        _animTime = new Label { Text = "", CustomMinimumSize = new Vector2(72, 0) };
+        _animTime.AddThemeColorOverride("font_color", UiTheme.Muted);
+        animRow.AddChild(_animTime);
+        modelBox.AddChild(animRow);
 
         _modelInfo = new Label { Text = "" };
         modelBox.AddChild(_modelInfo);
@@ -1142,7 +1190,9 @@ public partial class Main : Control
     private void BuildModelView()
     {
         if (_modelRoot is null) return;
-        foreach (var c in _modelRoot.GetChildren()) c.QueueFree();
+        foreach (var c in _modelRoot.GetChildren()) c.QueueFree(); // frees the old AnimationDriver too
+        _animDriver = null; _animCm = null; _animSkel = null;
+        if (_animRow is not null) _animRow.Visible = false;
         if (_lastData is null) { _modelInfo.Text = ""; return; }
 
         Vellichor.Render.CharacterModel? self = null;
@@ -1158,9 +1208,39 @@ public partial class Main : Control
             return;
         }
 
+        // An animation-only DAT (0x2b clips, no skeleton/mesh) — play it on the chosen race's body.
+        int n29 = _lastChunks.Count(c => c.Type == 0x29);
+        int n2a = _lastChunks.Count(c => c.Type == 0x2a);
+        int n2b = _lastChunks.Count(c => c.Type == 0x2b);
+        bool isAnimOnly = n2b > 0 && n29 == 0 && n2a == 0;
+        if (isAnimOnly && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
+
         if (_wearChk.ButtonPressed && _resolver?.Ready == true && TryWearOnBody()) return;
 
         ShowRawMeshes();
+    }
+
+    /// A standalone animation DAT (0x2b clips only) → assemble the chosen race's naked body and merge
+    /// this DAT's clips onto it, so the motion can be previewed. Uses Vellichor's clipDats path.
+    private bool TryAnimOnBody()
+    {
+        int race = _raceOpt.GetSelectedId();
+        var recipe = _resolver!.PcBaseParts(race, 0);
+        if (recipe is not { } rec) { _modelInfo.Text = "  (no base body for this race in the model tables)"; return false; }
+
+        byte[] skel;
+        try { skel = File.ReadAllBytes(rec.skeleton); } catch { return false; }
+        var parts = new List<byte[]>();
+        foreach (var (_, path) in rec.parts) { try { parts.Add(File.ReadAllBytes(path)); } catch { } }
+
+        Vellichor.Render.CharacterModel? cm = null;
+        try { cm = Vellichor.Render.CharacterModel.DecodeAssembled(skel, parts, clipDats: new[] { _lastData! }); }
+        catch (Exception e) { GD.Print("anim assemble failed: " + e.Message); }
+        if (cm is null || cm.BoneCount == 0) { _modelInfo.Text = "  (could not apply this animation to a body)"; return false; }
+
+        string? pref = _lastChunks.Where(c => c.Type == 0x2b).Select(c => c.Name).FirstOrDefault();
+        ShowCharacter(cm, $"animation on {_raceOpt.GetItemText(_raceOpt.Selected)} · {cm.ClipNames.Count} clips", pref);
+        return true;
     }
 
     /// Equipment part → assemble it onto the chosen race's naked base body, swapping the chosen slot.
@@ -1192,23 +1272,59 @@ public partial class Main : Control
         return true;
     }
 
-    private void ShowCharacter(Vellichor.Render.CharacterModel cm, string label)
+    private void ShowCharacter(Vellichor.Render.CharacterModel cm, string label, string? preferredClip = null)
     {
         var (root, skel, bounds) = cm.BuildInstance();
         _modelRoot.AddChild(root);
         _modelInfo.Text = $"  {label}   (drag to orbit · wheel to zoom)";
-        // Pose the reference/bind skeleton with idle (FFXI stores models in a splayed reference pose — arm out,
-        // leg raised — that MUST be posed by a clip to look natural). Mirrors ModelViewer's proven setup.
-        var clipName = cm.FindClip("idl", "std", "wlk", "");
-        if (clipName is not null && cm.Clip(clipName) is { } cc)
+
+        // Animation: FFXI models are stored in a splayed reference pose that must be driven by a 0x2b
+        // clip to look natural. Wire the driver + clip picker so any clip can be played/scrubbed.
+        _animCm = cm;
+        _animSkel = skel;
+        var clips = cm.ClipNames.ToList();
+        _clipOpt.Clear();
+        foreach (var n in clips) _clipOpt.AddItem(n);
+        _animRow.Visible = clips.Count > 0;
+        if (clips.Count > 0)
         {
-            var driver = new Vellichor.Render.AnimationDriver();
-            root.AddChild(driver);
-            driver.Setup(skel, cc.tracks, cc.frames, cc.fps);
-            driver.Loop = true;
+            _animDriver = new Vellichor.Render.AnimationDriver();
+            root.AddChild(_animDriver);
+            // default to the opened animation's clip, else an idle/standing/walk clip, else the first
+            string pick = preferredClip is not null && clips.Contains(preferredClip)
+                ? preferredClip
+                : cm.FindClip("idl", "std", "wlk", "") ?? clips[0];
+            int idx = clips.IndexOf(pick);
+            _clipOpt.Selected = idx < 0 ? 0 : idx;
+            PlaySelectedClip(resetClock: true);
         }
+
         var measured = WorldAabbOf(root);
         FrameCamera(measured.Size.Length() > 0.01f ? measured : bounds);
+    }
+
+    /// Load the currently-selected clip into the driver (we drive it via Seek from our own clock).
+    private void PlaySelectedClip(bool resetClock)
+    {
+        if (_animCm is null || _animDriver is null || _animSkel is null || _clipOpt.Selected < 0) return;
+        string name = _clipOpt.GetItemText(_clipOpt.Selected);
+        if (_animCm.Clip(name) is not { } cc) { _animTime.Text = "(undecodable)"; return; }
+        _animDriver.Setup(_animSkel, cc.tracks, cc.frames, cc.fps);
+        _animDriver.Playing = false;                 // our _Process drives it via Seek
+        _animFrames = cc.frames;
+        _animFps = cc.fps > 0.01f ? cc.fps : 30f;
+        _animDuration = _animFrames > 0 ? _animFrames / _animFps : 0;
+        if (resetClock) _animClock = 0;
+        _animPlaying = _animDuration > 0;
+        _animPlayBtn.Text = _animPlaying ? "❚❚" : "▶";
+        _animDriver.Seek((float)_animClock);
+    }
+
+    private void ToggleAnim()
+    {
+        if (_animDriver is null || _animDuration <= 0) return;
+        _animPlaying = !_animPlaying;
+        _animPlayBtn.Text = _animPlaying ? "❚❚" : "▶";
     }
 
     /// Union of every child MeshInstance3D's AABB (in root space) — a reliable extent for framing.
@@ -1370,6 +1486,28 @@ public partial class Main : Control
         var offset = new Vector3(Mathf.Sin(_yaw) * cp, Mathf.Sin(_pitch), Mathf.Cos(_yaw) * cp) * _dist;
         _cam.Position = _focus + offset;
         _cam.LookAt(_focus, Vector3.Up);
+
+        // advance the animation (we own the clock; the driver just poses at the time we Seek to)
+        if (_animDriver is not null && _animDuration > 0)
+        {
+            if (_animPlaying && !_animScrubbing)
+            {
+                _animClock += delta * _animSpeed;
+                if (_animClock >= _animDuration)
+                {
+                    if (_animLoopChk.ButtonPressed) _animClock = Mathf.PosMod((float)_animClock, (float)_animDuration);
+                    else { _animClock = _animDuration; _animPlaying = false; _animPlayBtn.Text = "▶"; }
+                }
+                _animDriver.Seek((float)_animClock);
+            }
+            if (!_animScrubbing)
+            {
+                _animSeekProg = true;
+                _animSeek.Value = _animClock / _animDuration;
+                _animSeekProg = false;
+            }
+            _animTime.Text = $"{(int)(_animClock * _animFps)}/{_animFrames}";
+        }
 
         // advance the music scrubber (skip while the user is dragging it)
         if (_audio is not null && _audio.Playing && !_audio.StreamPaused && _musicLenSec > 0)
