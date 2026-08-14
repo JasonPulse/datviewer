@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/JasonPulse/datviewer/compare/v1.2.2...v1.3.0) (2026-08-14)
+
+
+### Features
+
+* animation playback in the Model tab ([7668c0e](https://github.com/JasonPulse/datviewer/commit/7668c0eca81457c4460d067573bf3019f51325b2))
+
 ## [1.2.2](https://github.com/JasonPulse/datviewer/compare/v1.2.1...v1.2.2) (2026-08-14)
 
 
