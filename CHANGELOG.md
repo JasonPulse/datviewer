@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/JasonPulse/datviewer/compare/v1.5.1...v1.5.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* mesh-less effect/animation DATs now render (magic-cast, idle sets) ([f6c98a2](https://github.com/JasonPulse/datviewer/commit/f6c98a234684def20d197fb6ed7d1246c719b3b0))
+
 ## [1.5.1](https://github.com/JasonPulse/datviewer/compare/v1.5.0...v1.5.1) (2026-08-14)
 
 
