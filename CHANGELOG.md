@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/JasonPulse/datviewer/compare/v1.4.0...v1.4.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* Animation tab dropdown lists only the selected action's clips ([99bc76c](https://github.com/JasonPulse/datviewer/commit/99bc76c2b663c247ae4b8a9f4b36a07802d9fc54))
+
 # [1.4.0](https://github.com/JasonPulse/datviewer/compare/v1.3.0...v1.4.0) (2026-08-14)
 
 
