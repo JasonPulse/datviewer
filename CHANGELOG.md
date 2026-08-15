@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/JasonPulse/datviewer/compare/v1.9.0...v1.10.0) (2026-08-15)
+
+
+### Features
+
+* recent-locations quick-jump sidebar in the Open-file browser ([db9e0de](https://github.com/JasonPulse/datviewer/commit/db9e0deef6fb22440b28c0d3cc67b641d8bc5df5))
+
 # [1.9.0](https://github.com/JasonPulse/datviewer/compare/v1.8.0...v1.9.0) (2026-08-15)
 
 
