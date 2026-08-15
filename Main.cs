@@ -59,6 +59,18 @@ public partial class Main : Control
     public IReadOnlyList<string> SelectedParts => _selectedParts;
     private string _libLabel = "";   // current Library item name — so a wear-race change reloads THAT race's version
 
+    // transient auto-decision notice (yellow bar; dismissed on any change)
+    private PanelContainer _noticeBar = null!;
+    private Label _notice = null!;
+
+    // custom searchable file browser (Open .DAT)
+    private Control? _fbOverlay;
+    private Label _fbPath = null!;
+    private LineEdit _fbSearch = null!;
+    private CheckBox _fbRecursive = null!;
+    private Tree _fbTree = null!;
+    private string _fbDir = "";
+
     // right / info + preview
     private RichTextLabel _info = null!;
     private TabContainer _tabs = null!;
@@ -146,6 +158,11 @@ public partial class Main : Control
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_SETTINGS") is not null)
             Callable.From(() => OpenSettings(firstRun: false)).CallDeferred();
 
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_BROWSE") is { } bq)
+            Callable.From(() => { OpenFileBrowser(); var p = bq.Split('|');
+                if (p[0].Length > 0) FbSetDir(p[0]);
+                if (p.Length > 1) { _fbRecursive.ButtonPressed = true; _fbSearch.Text = p[1]; FbPopulate(); } }).CallDeferred();
+
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_BGWSELFTEST") is not null)
             Callable.From(BgwSelfTest).CallDeferred();
 
@@ -198,6 +215,16 @@ public partial class Main : Control
         outer.AddThemeConstantOverride("separation", 8);
         pad.AddChild(outer);
 
+        // full-width transient notice bar (auto-decisions); hidden until ShowNotice, cleared on any change
+        _noticeBar = new PanelContainer { Visible = false };
+        var nsb = new StyleBoxFlat { BgColor = new Color(0.92f, 0.78f, 0.35f, 0.16f), BorderColor = UiTheme.Gold };
+        nsb.SetCornerRadiusAll(6); nsb.SetContentMarginAll(9); nsb.SetBorderWidthAll(1);
+        _noticeBar.AddThemeStyleboxOverride("panel", nsb);
+        _notice = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _notice.AddThemeColorOverride("font_color", UiTheme.Gold);
+        _noticeBar.AddChild(_notice);
+        outer.AddChild(_noticeBar);
+
         var split = new HSplitContainer { SplitOffset = 360, SizeFlagsVertical = SizeFlags.ExpandFill };
         outer.AddChild(split);
 
@@ -219,7 +246,7 @@ public partial class Main : Control
         btnRow.AddThemeConstantOverride("separation", 6);
         left.AddChild(btnRow);
         var openBtn = new Button { Text = "Open .DAT…" };
-        openBtn.Pressed += OpenFileDialog;
+        openBtn.Pressed += OpenFileBrowser;
         btnRow.AddChild(openBtn);
         var settingsBtn = new Button { Text = "⚙ Settings" };
         settingsBtn.Pressed += () => OpenSettings(firstRun: false);
@@ -233,6 +260,7 @@ public partial class Main : Control
         // two navigation modes: the AltanaViewer-style named Library, and the raw ROM tree
         var navTabs = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         _navTabs = navTabs;
+        navTabs.TabChanged += _ => HideNotice();
         left.AddChild(navTabs);
 
         // -- Library tab (named, categorised) --
@@ -307,7 +335,7 @@ public partial class Main : Control
         // it onto a chosen race's naked body (skeleton + head/hands/legs/feet) so you see it worn.
         var wearRow = new HBoxContainer();
         _wearChk = new CheckBox { Text = "Wear on body", ButtonPressed = true };
-        _wearChk.Toggled += _ => BuildModelView();
+        _wearChk.Toggled += _ => { HideNotice(); BuildModelView(); };
         wearRow.AddChild(_wearChk);
         wearRow.AddChild(new Label { Text = "  Race:" });
         _raceOpt = new OptionButton();
@@ -319,7 +347,7 @@ public partial class Main : Control
         wearRow.AddChild(new Label { Text = "  Slot:" });
         _slotOpt = new OptionButton();
         foreach (var s in new[] { "body", "head", "hands", "legs", "feet" }) _slotOpt.AddItem(s);
-        _slotOpt.ItemSelected += _ => BuildModelView();
+        _slotOpt.ItemSelected += _ => { HideNotice(); BuildModelView(); };
         wearRow.AddChild(_slotOpt);
         modelBox.AddChild(wearRow);
 
@@ -329,7 +357,7 @@ public partial class Main : Control
         _animRow = animRow;
         animRow.AddChild(new Label { Text = "Anim:" });
         _clipOpt = new OptionButton { CustomMinimumSize = new Vector2(150, 0) };
-        _clipOpt.ItemSelected += _ => PlaySelectedClip(resetClock: true);
+        _clipOpt.ItemSelected += _ => { HideNotice(); PlaySelectedClip(resetClock: true); };
         animRow.AddChild(_clipOpt);
         _animPlayBtn = new Button { Text = "❚❚", CustomMinimumSize = new Vector2(40, 0) };
         _animPlayBtn.Pressed += ToggleAnim;
@@ -477,6 +505,7 @@ public partial class Main : Control
     /// <c>&lt;install&gt;/&lt;soundN&gt;/win/music/data/music&lt;id&gt;.bgw</c>.
     private void PlayMusicEntry(LibEntry e, string folder)
     {
+        HideNotice();
         string id = e.RefToken.Trim();
         string path = Path.Combine(_root, folder, "win", "music", "data", $"music{id}.bgw");
         _info.Clear();
@@ -877,6 +906,7 @@ public partial class Main : Control
     /// Apply a named action's clip DAT(s) to the race's base body and play it in the Model tab.
     private void PlayAnimationEntry(LibEntry e, int raceId, string raceLabel)
     {
+        HideNotice();
         if (_resolver?.Ready != true) { Flash("set your FFXI install root first (⚙ Settings)"); return; }
 
         var abs = new List<string>();
@@ -959,6 +989,7 @@ public partial class Main : Control
     /// same DAT onto a different skeleton (which explodes it). Falls back to a plain re-skin for a raw-opened DAT.
     private void OnWearRaceChanged()
     {
+        HideNotice();
         if (!string.IsNullOrEmpty(_libLabel))
         {
             string? abs = LibDatForRace(_raceOpt.GetSelectedId());
@@ -1018,7 +1049,7 @@ public partial class Main : Control
     ///   1. the file's ROM path (opened from the install, or embedded in the mod's filename like
     ///      "Savant's Bonnet ROM.253.26.DAT") reverse-looked-up in the PC catalog → race+slot+name;
     ///   2. race/slot keywords in the filename (e.g. "…mithra_body_196.dat", "Feet.DAT").
-    private (int raceId, string slot, string item, bool raceGuess)? DeduceEquip(string path)
+    private (int raceId, string slot, string item, string? notice)? DeduceEquip(string path)
     {
         if (_catalog is null) return null;
         var idx = _catalog.PcPathIndex();
@@ -1040,7 +1071,7 @@ public partial class Main : Control
             if (idx.TryGetValue(rp, out var hit))
             {
                 string slot = hit.slot.ToLowerInvariant();
-                return (PcRaceId(hit.race), slot, hit.item, false);
+                return (PcRaceId(hit.race), slot, hit.item, null); // definitive
             }
 
         // fallback 1: keywords in the filename
@@ -1051,23 +1082,45 @@ public partial class Main : Control
         kslot ??= SlotFromGeometry();
         if (kslot is null) return null;
         // fallback 3: no race hint either — best-fit guess by trying it on every race's body.
-        bool guess = false;
-        if (race == 0) { race = RaceFromGeometry(); guess = race != 0; }
-        return (race, kslot, "", guess);
+        string? notice = null;
+        if (race == 0)
+        {
+            var (best, plausible) = RaceFitRanked();
+            race = best;
+            if (best != 0)
+                notice = plausible.Count > 1
+                    ? $"Auto-selected {RaceName(best)} · {kslot}. This DAT could be {string.Join(" or ", plausible.Select(RaceName))} (near-identical build) — set the Race if it's wrong."
+                    : $"Auto-selected {RaceName(best)} · {kslot} (best geometric fit) — set the Race if it's wrong.";
+        }
+        return (race, kslot, "", notice);
     }
 
-    /// Best-fit race for a hint-less part: the race whose naked body the part's surface hugs closest
-    /// (see RaceFitGap). Not exact for similar builds (Mithra ≈ Hume ♀), but far better than a default.
-    private int RaceFromGeometry()
+    /// Best-fit race for a hint-less part + the races that fit near-equally well (within 10% of the best
+    /// gap — genuinely ambiguous, e.g. Mithra ≈ Hume ♀ for legs). Ranks by how closely the part's surface
+    /// hugs each race's naked body (see RaceFitGap).
+    private (int best, List<int> plausible) RaceFitRanked()
     {
-        int best = 0; float bestGap = float.MaxValue;
+        var gaps = new List<(int rid, float g)>();
         foreach (int rid in new[] { 1, 2, 3, 4, 5, 6, 7, 8 })
         {
             float g = RaceFitGap(rid);
-            if (!float.IsNaN(g) && g < bestGap) { bestGap = g; best = rid; }
+            if (!float.IsNaN(g)) gaps.Add((rid, g));
         }
-        return best;
+        if (gaps.Count == 0) return (0, new());
+        gaps.Sort((a, b) => a.g.CompareTo(b.g));
+        float best = gaps[0].g;
+        var plausible = gaps.Where(x => x.g <= best * 1.10f).Select(x => x.rid).ToList();
+        return (gaps[0].rid, plausible);
     }
+
+    private static string RaceName(int id) => id switch
+    {
+        1 => "Hume ♂", 2 => "Hume ♀", 3 => "Elvaan ♂", 4 => "Elvaan ♀",
+        5 => "Tarutaru ♂", 6 => "Tarutaru ♀", 7 => "Mithra", 8 => "Galka", _ => "?",
+    };
+
+    private void ShowNotice(string msg) { if (_notice is null) return; _notice.Text = "⚠  " + msg; _noticeBar.Visible = true; }
+    private void HideNotice() { if (_noticeBar is not null) _noticeBar.Visible = false; }
 
     /// Infer a wearable slot from the part's geometry: skin it on a reference (Mithra) skeleton alone
     /// and classify by where the mesh sits (head high, feet at the ground, body wide at the torso, …).
@@ -1426,6 +1479,7 @@ public partial class Main : Control
 
     private void LoadDat(string path)
     {
+        HideNotice(); // a new DAT clears any prior auto-decision notice (may re-show below)
         path = Path.GetFullPath(path); // normalize so the reverse-map (path→id) lookup matches
         byte[] data;
         try { data = File.ReadAllBytes(path); }
@@ -1465,9 +1519,10 @@ public partial class Main : Control
             if (eq.raceId > 0) for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == eq.raceId) _raceOpt.Selected = i;
             if (WearSlots.Contains(eq.slot)) for (int i = 0; i < _slotOpt.ItemCount; i++) if (_slotOpt.GetItemText(i) == eq.slot) _slotOpt.Selected = i;
             _wearChk.ButtonPressed = true;
-            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) + (eq.raceGuess ? " (best fit)" : "") : "?";
+            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) + (eq.notice is not null ? " (best fit)" : "") : "?";
             string what = string.IsNullOrEmpty(eq.item) ? "" : $" · [b]{eq.item}[/b]";
             _info.AppendText($"[color=#e8c877]detected:[/color] {who} · {eq.slot}{what}");
+            if (eq.notice is not null) ShowNotice(eq.notice); // ambiguous/best-fit → yellow banner
             GD.Print($"[detected] {Path.GetFileName(path)} -> race={who} slot={eq.slot} item='{eq.item}'");
         }
 
@@ -2048,29 +2103,141 @@ public partial class Main : Control
         LoadDat(f);
     }
 
-    private void OpenFileDialog()
+    // ---- custom searchable file browser (Open .DAT) ----------------------------------------
+
+    private void OpenFileBrowser()
     {
-        var fd = new FileDialog
+        if (_fbOverlay is not null && GodotObject.IsInstanceValid(_fbOverlay))
         {
-            FileMode = FileDialog.FileModeEnum.OpenFile,
-            Access = FileDialog.AccessEnum.Filesystem,
-            Filters = new[] { "*.DAT ; FFXI DAT files", "* ; All files" },
-            Size = new Vector2I(900, 640),
-            Title = "Open a .DAT file",
-        };
-        // Start in the last directory you browsed (remembered across launches), else the install root.
-        string startDir = Directory.Exists(_lastOpenDir) ? _lastOpenDir : (Directory.Exists(_root) ? _root : "");
-        if (startDir.Length > 0) fd.CurrentDir = startDir;
-        fd.FileSelected += p =>
+            _fbOverlay.Visible = true;
+            return;
+        }
+
+        var overlay = new Control { MouseFilter = MouseFilterEnum.Stop };
+        overlay.SetAnchorsPreset(LayoutPreset.FullRect);
+        var dim = new ColorRect { Color = new Color(0, 0, 0, 0.55f) };
+        dim.SetAnchorsPreset(LayoutPreset.FullRect);
+        overlay.AddChild(dim);
+        var center = new CenterContainer();
+        center.SetAnchorsPreset(LayoutPreset.FullRect);
+        overlay.AddChild(center);
+
+        var panel = new PanelContainer { CustomMinimumSize = new Vector2(760, 560) };
+        center.AddChild(panel);
+        var pad = new MarginContainer();
+        foreach (var m in new[] { "margin_left", "margin_right", "margin_top", "margin_bottom" }) pad.AddThemeConstantOverride(m, 14);
+        panel.AddChild(pad);
+        var box = new VBoxContainer();
+        box.AddThemeConstantOverride("separation", 8);
+        pad.AddChild(box);
+
+        var head = new Label { Text = "Open a .DAT file" };
+        head.AddThemeFontSizeOverride("font_size", 16);
+        head.AddThemeColorOverride("font_color", UiTheme.Gold);
+        box.AddChild(head);
+
+        var navRow = new HBoxContainer();
+        var up = new Button { Text = "↑ Up" };
+        up.Pressed += () => { var p = Directory.GetParent(_fbDir); if (p is not null) FbSetDir(p.FullName); };
+        navRow.AddChild(up);
+        _fbPath = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true };
+        _fbPath.AddThemeColorOverride("font_color", UiTheme.Muted);
+        navRow.AddChild(_fbPath);
+        box.AddChild(navRow);
+
+        var searchRow = new HBoxContainer();
+        _fbSearch = new LineEdit { PlaceholderText = "search files by name…", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _fbSearch.TextChanged += _ => FbPopulate();
+        searchRow.AddChild(_fbSearch);
+        _fbRecursive = new CheckBox { Text = "subfolders" };
+        _fbRecursive.Toggled += _ => FbPopulate();
+        searchRow.AddChild(_fbRecursive);
+        box.AddChild(searchRow);
+
+        _fbTree = new Tree { SizeFlagsVertical = SizeFlags.ExpandFill, HideRoot = true };
+        _fbTree.ItemActivated += FbActivate; // double-click / Enter
+        box.AddChild(_fbTree);
+
+        var footer = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
+        var cancel = new Button { Text = "Cancel" };
+        cancel.Pressed += () => { if (_fbOverlay is not null) _fbOverlay.Visible = false; };
+        footer.AddChild(cancel);
+        var open = new Button { Text = "Open" };
+        open.Pressed += FbActivate;
+        footer.AddChild(open);
+        box.AddChild(footer);
+
+        AddChild(overlay);
+        _fbOverlay = overlay;
+
+        FbSetDir(Directory.Exists(_lastOpenDir) ? _lastOpenDir : Directory.Exists(_root) ? _root
+                 : System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile));
+        _fbSearch.GrabFocus();
+    }
+
+    private void FbSetDir(string dir)
+    {
+        _fbDir = dir;
+        _fbPath.Text = dir;
+        _fbSearch.Text = "";
+        FbPopulate();
+    }
+
+    private void FbPopulate()
+    {
+        if (_fbTree is null) return;
+        _fbTree.Clear();
+        var root = _fbTree.CreateItem();
+        string q = _fbSearch.Text.Trim();
+        bool recursive = _fbRecursive.ButtonPressed && q.Length > 0;
+
+        void Row(string text, string path, bool isDir)
         {
-            _lastOpenDir = Path.GetDirectoryName(p) ?? _lastOpenDir;
+            var it = _fbTree.CreateItem(root);
+            it.SetText(0, (isDir ? "📁  " : "📄  ") + text);
+            it.SetMetadata(0, path);
+            if (isDir) it.SetCustomColor(0, UiTheme.Accent);
+        }
+
+        try
+        {
+            if (recursive)
+            {
+                int shown = 0;
+                foreach (var f in Directory.EnumerateFiles(_fbDir, "*", SearchOption.AllDirectories))
+                {
+                    if (!IsDat(f) || Path.GetFileName(f).IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    Row(Path.GetRelativePath(_fbDir, f), f, false);
+                    if (++shown >= 1000) break;
+                }
+                if (shown == 0) { var it = _fbTree.CreateItem(root); it.SetText(0, "  (no matching .DAT under this folder)"); it.SetSelectable(0, false); }
+                return;
+            }
+            foreach (var d in Directory.EnumerateDirectories(_fbDir).OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+                if (q.Length == 0 || Path.GetFileName(d).Contains(q, StringComparison.OrdinalIgnoreCase))
+                    Row(Path.GetFileName(d), d, true);
+            foreach (var f in Directory.EnumerateFiles(_fbDir).Where(IsDat).OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+                if (q.Length == 0 || Path.GetFileName(f).Contains(q, StringComparison.OrdinalIgnoreCase))
+                    Row(Path.GetFileName(f), f, false);
+        }
+        catch (Exception e) { var it = _fbTree.CreateItem(root); it.SetText(0, "  (" + e.Message + ")"); it.SetSelectable(0, false); }
+    }
+
+    private void FbActivate()
+    {
+        var it = _fbTree.GetSelected();
+        if (it is null) return;
+        var meta = it.GetMetadata(0);
+        if (meta.VariantType == Variant.Type.Nil) return;
+        string path = meta.AsString();
+        if (Directory.Exists(path)) { FbSetDir(path); return; }
+        if (File.Exists(path))
+        {
+            _lastOpenDir = Path.GetDirectoryName(path) ?? _lastOpenDir;
             SaveSettings();
-            LoadDat(p);
-            fd.QueueFree();
-        };
-        fd.Canceled += fd.QueueFree;
-        AddChild(fd);
-        fd.PopupCentered();
+            if (_fbOverlay is not null) _fbOverlay.Visible = false;
+            LoadDat(path);
+        }
     }
 
     private void OpenRootDialog()
