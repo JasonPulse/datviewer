@@ -81,8 +81,9 @@ race/slot, so it renders worn.
   set the UI scale. The install path and scale are saved to `user://settings.cfg`. On first run with
   no valid install, Settings opens automatically. Startup order: `$DATVIEWER_ROOT` → saved setting →
   a sibling `corpus/` checkout (dev only) → onboarding.
-- **Open .DAT…** — open any file, including user-made mod DATs (no file id needed). Remembers the
-  last folder you browsed (saved to `user://settings.cfg`) and reopens there next time.
+- **Open .DAT…** — a built-in file browser: **search** the current folder by name (tick *subfolders*
+  to search the whole tree), a **quick-jump sidebar** (Home, your FFXI install, and **recent
+  locations**), and folder navigation. Remembers the last folder (saved to `user://settings.cfg`).
 - **Drag & drop** — drag a `.DAT` from Finder/Explorer onto the window to open it.
 - **ROM Tree search** — the ROM Tree tab has a search box: type any part of a ROM path or a file id to
   find files across the whole install (blank restores the folder tree).

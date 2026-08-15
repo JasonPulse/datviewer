@@ -69,7 +69,9 @@ public partial class Main : Control
     private LineEdit _fbSearch = null!;
     private CheckBox _fbRecursive = null!;
     private Tree _fbTree = null!;
+    private ItemList _fbRecent = null!;
     private string _fbDir = "";
+    private readonly List<string> _recentDirs = new(); // recent folders (persisted), most-recent first
 
     // right / info + preview
     private RichTextLabel _info = null!;
@@ -1222,6 +1224,9 @@ public partial class Main : Control
         if (cfg.Load(SettingsPath) != Error.Ok) return;
         _savedRoot = cfg.GetValue("paths", "rom_root", "").AsString();
         _lastOpenDir = cfg.GetValue("paths", "last_open_dir", "").AsString();
+        _recentDirs.Clear();
+        _recentDirs.AddRange(cfg.GetValue("paths", "recent_dirs", "").AsString()
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(Directory.Exists));
         _uiScale = cfg.GetValue("ui", "scale", 1.5f).AsSingle();
         if (_uiScale is < 0.5f or > 4f) _uiScale = 1.5f;
     }
@@ -1232,6 +1237,7 @@ public partial class Main : Control
         cfg.Load(SettingsPath); // preserve any keys we don't manage
         cfg.SetValue("paths", "rom_root", _root);
         cfg.SetValue("paths", "last_open_dir", _lastOpenDir);
+        cfg.SetValue("paths", "recent_dirs", string.Join("\n", _recentDirs));
         cfg.SetValue("ui", "scale", _uiScale);
         cfg.Save(SettingsPath);
     }
@@ -2099,7 +2105,7 @@ public partial class Main : Control
                     ?? files.FirstOrDefault();
         if (f is null || !File.Exists(f)) return;
         _lastOpenDir = Path.GetDirectoryName(f) ?? _lastOpenDir;
-        SaveSettings();
+        AddRecent(_lastOpenDir);
         LoadDat(f);
     }
 
@@ -2136,6 +2142,37 @@ public partial class Main : Control
         head.AddThemeColorOverride("font_color", UiTheme.Gold);
         box.AddChild(head);
 
+        // body: [ quick-jump sidebar | main browse column ]
+        var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        body.AddThemeConstantOverride("separation", 10);
+        box.AddChild(body);
+
+        // --- sidebar: Home / install root + recent locations ---
+        var side = new VBoxContainer { CustomMinimumSize = new Vector2(210, 0) };
+        side.AddThemeConstantOverride("separation", 4);
+        body.AddChild(side);
+        var homeBtn = new Button { Text = "🏠  Home", Alignment = HorizontalAlignment.Left };
+        homeBtn.Pressed += () => FbSetDir(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile));
+        side.AddChild(homeBtn);
+        if (Directory.Exists(_root))
+        {
+            var rootBtn = new Button { Text = "🎮  FFXI install", Alignment = HorizontalAlignment.Left };
+            rootBtn.Pressed += () => FbSetDir(_root);
+            side.AddChild(rootBtn);
+        }
+        var recLabel = new Label { Text = "Recent" };
+        recLabel.AddThemeColorOverride("font_color", UiTheme.Muted);
+        recLabel.AddThemeFontSizeOverride("font_size", 11);
+        side.AddChild(recLabel);
+        _fbRecent = new ItemList { SizeFlagsVertical = SizeFlags.ExpandFill, AutoHeight = false };
+        _fbRecent.ItemSelected += i => { var p = _fbRecent.GetItemMetadata((int)i).AsString(); if (Directory.Exists(p)) FbSetDir(p); };
+        side.AddChild(_fbRecent);
+
+        // --- main column: path bar, search, file list ---
+        var main = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        main.AddThemeConstantOverride("separation", 8);
+        body.AddChild(main);
+
         var navRow = new HBoxContainer();
         var up = new Button { Text = "↑ Up" };
         up.Pressed += () => { var p = Directory.GetParent(_fbDir); if (p is not null) FbSetDir(p.FullName); };
@@ -2143,7 +2180,7 @@ public partial class Main : Control
         _fbPath = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true };
         _fbPath.AddThemeColorOverride("font_color", UiTheme.Muted);
         navRow.AddChild(_fbPath);
-        box.AddChild(navRow);
+        main.AddChild(navRow);
 
         var searchRow = new HBoxContainer();
         _fbSearch = new LineEdit { PlaceholderText = "search files by name…", SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -2152,11 +2189,11 @@ public partial class Main : Control
         _fbRecursive = new CheckBox { Text = "subfolders" };
         _fbRecursive.Toggled += _ => FbPopulate();
         searchRow.AddChild(_fbRecursive);
-        box.AddChild(searchRow);
+        main.AddChild(searchRow);
 
         _fbTree = new Tree { SizeFlagsVertical = SizeFlags.ExpandFill, HideRoot = true };
         _fbTree.ItemActivated += FbActivate; // double-click / Enter
-        box.AddChild(_fbTree);
+        main.AddChild(_fbTree);
 
         var footer = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
         var cancel = new Button { Text = "Cancel" };
@@ -2170,6 +2207,7 @@ public partial class Main : Control
         AddChild(overlay);
         _fbOverlay = overlay;
 
+        FbRefreshRecents();
         FbSetDir(Directory.Exists(_lastOpenDir) ? _lastOpenDir : Directory.Exists(_root) ? _root
                  : System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile));
         _fbSearch.GrabFocus();
@@ -2181,6 +2219,29 @@ public partial class Main : Control
         _fbPath.Text = dir;
         _fbSearch.Text = "";
         FbPopulate();
+    }
+
+    private void FbRefreshRecents()
+    {
+        if (_fbRecent is null) return;
+        _fbRecent.Clear();
+        foreach (var d in _recentDirs)
+        {
+            int i = _fbRecent.AddItem(Path.GetFileName(d.TrimEnd('/', '\\')) is { Length: > 0 } n ? n : d);
+            _fbRecent.SetItemMetadata(i, d);
+            _fbRecent.SetItemTooltip(i, d);
+        }
+    }
+
+    // Record a folder as a recent location (most-recent first, deduped, capped).
+    private void AddRecent(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+        _recentDirs.RemoveAll(d => string.Equals(d, dir, StringComparison.OrdinalIgnoreCase));
+        _recentDirs.Insert(0, dir);
+        if (_recentDirs.Count > 12) _recentDirs.RemoveRange(12, _recentDirs.Count - 12);
+        SaveSettings();
+        FbRefreshRecents();
     }
 
     private void FbPopulate()
@@ -2234,7 +2295,7 @@ public partial class Main : Control
         if (File.Exists(path))
         {
             _lastOpenDir = Path.GetDirectoryName(path) ?? _lastOpenDir;
-            SaveSettings();
+            AddRecent(_lastOpenDir);
             if (_fbOverlay is not null) _fbOverlay.Visible = false;
             LoadDat(path);
         }
