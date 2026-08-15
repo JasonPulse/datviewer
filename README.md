@@ -32,10 +32,13 @@ Two jobs:
    - **Model** — a posed, textured 3D preview, drag to orbit, wheel to zoom:
      - a self-contained model (creature / full NPC) shows posed;
      - an **equipment part** (e.g. a body piece) is shown **worn on a base race body**. The viewer
-       **auto-detects the race + slot + item** — from the file's ROM path (retail, or a ROM ref in a
-       mod's filename like `Savant's Bonnet ROM.253.26.DAT`), else from race/slot keywords in the name
-       (`…mithra_body_196.dat`, `Feet.DAT`) — so it dresses correctly without you knowing the piece. You
-       can still override **Race**/**Slot** manually. Uncheck *Wear on body* for the bare garment mesh.
+       **auto-detects the race + slot + item** so it dresses correctly without you knowing the piece:
+       from the file's ROM path (retail, or a ROM ref in a mod's filename like
+       `Savant's Bonnet ROM.253.26.DAT`), else race/slot keywords in the name (`…mithra_body_196.dat`,
+       `Feet.DAT`), else — for a **hint-less** file like `60.dat` — the **slot** is read from where the
+       mesh sits on the body and a **best-fit race** is chosen by trying the part on each race and taking
+       the closest hug (labelled "best fit"; exact for distinctive parts, approximate between similar
+       builds). You can still override **Race**/**Slot**. Uncheck *Wear on body* for the bare mesh.
      - **Animation** — models with `0x2b` clips get a transport bar: pick a **clip**, play/pause, toggle
        loop, change speed, and scrub the timeline (frame N/total). A standalone **animation DAT** (clips
        only, no mesh) is applied to the chosen race's body and plays its own clips.

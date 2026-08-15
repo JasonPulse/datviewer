@@ -1018,7 +1018,7 @@ public partial class Main : Control
     ///   1. the file's ROM path (opened from the install, or embedded in the mod's filename like
     ///      "Savant's Bonnet ROM.253.26.DAT") reverse-looked-up in the PC catalog → race+slot+name;
     ///   2. race/slot keywords in the filename (e.g. "…mithra_body_196.dat", "Feet.DAT").
-    private (int raceId, string slot, string item)? DeduceEquip(string path)
+    private (int raceId, string slot, string item, bool raceGuess)? DeduceEquip(string path)
     {
         if (_catalog is null) return null;
         var idx = _catalog.PcPathIndex();
@@ -1040,7 +1040,7 @@ public partial class Main : Control
             if (idx.TryGetValue(rp, out var hit))
             {
                 string slot = hit.slot.ToLowerInvariant();
-                return (PcRaceId(hit.race), slot, hit.item);
+                return (PcRaceId(hit.race), slot, hit.item, false);
             }
 
         // fallback 1: keywords in the filename
@@ -1049,8 +1049,24 @@ public partial class Main : Control
         string? kslot = SlotFromName(lower);
         // fallback 2: no name hints (a bare "60.dat") — infer the slot from where the mesh sits on the body.
         kslot ??= SlotFromGeometry();
-        if (kslot is not null) return (race, kslot, "");
-        return null;
+        if (kslot is null) return null;
+        // fallback 3: no race hint either — best-fit guess by trying it on every race's body.
+        bool guess = false;
+        if (race == 0) { race = RaceFromGeometry(); guess = race != 0; }
+        return (race, kslot, "", guess);
+    }
+
+    /// Best-fit race for a hint-less part: the race whose naked body the part's surface hugs closest
+    /// (see RaceFitGap). Not exact for similar builds (Mithra ≈ Hume ♀), but far better than a default.
+    private int RaceFromGeometry()
+    {
+        int best = 0; float bestGap = float.MaxValue;
+        foreach (int rid in new[] { 1, 2, 3, 4, 5, 6, 7, 8 })
+        {
+            float g = RaceFitGap(rid);
+            if (!float.IsNaN(g) && g < bestGap) { bestGap = g; best = rid; }
+        }
+        return best;
     }
 
     /// Infer a wearable slot from the part's geometry: skin it on a reference (Mithra) skeleton alone
@@ -1449,7 +1465,7 @@ public partial class Main : Control
             if (eq.raceId > 0) for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == eq.raceId) _raceOpt.Selected = i;
             if (WearSlots.Contains(eq.slot)) for (int i = 0; i < _slotOpt.ItemCount; i++) if (_slotOpt.GetItemText(i) == eq.slot) _slotOpt.Selected = i;
             _wearChk.ButtonPressed = true;
-            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) : "?";
+            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) + (eq.raceGuess ? " (best fit)" : "") : "?";
             string what = string.IsNullOrEmpty(eq.item) ? "" : $" · [b]{eq.item}[/b]";
             _info.AppendText($"[color=#e8c877]detected:[/color] {who} · {eq.slot}{what}");
             GD.Print($"[detected] {Path.GetFileName(path)} -> race={who} slot={eq.slot} item='{eq.item}'");
@@ -1751,6 +1767,76 @@ public partial class Main : Control
         }
         Walk(root, Transform3D.Identity);
         return total;
+    }
+
+    // Mean nearest-neighbour distance from the opened part's vertices to race R's naked-body surface
+    // (bind pose). A part authored for R hugs R's body → small gap; wrong-race proportions → larger.
+    private float RaceFitGap(int raceId)
+    {
+        if (_lastData is null || _resolver?.Ready != true || _resolver.PcBaseParts(raceId, 0) is not { } rec) return float.NaN;
+        try
+        {
+            byte[] skel = File.ReadAllBytes(rec.skeleton);
+            var partCm = Vellichor.Render.CharacterModel.DecodeAssembled(skel, new[] { _lastData });
+            var bodyParts = new List<byte[]>();
+            foreach (var (_, p) in rec.parts) { try { bodyParts.Add(File.ReadAllBytes(p)); } catch { } }
+            var bodyCm = Vellichor.Render.CharacterModel.DecodeAssembled(skel, bodyParts);
+            if (partCm is null || bodyCm is null) return float.NaN;
+            var (pr, _, _) = partCm.BuildInstance();
+            var (br, _, _) = bodyCm.BuildInstance();
+            var pv = VertsOf(pr); var bv = VertsOf(br);
+            pr.QueueFree(); br.QueueFree();
+            if (pv.Count == 0 || bv.Count == 0) return float.NaN;
+            // subsample part verts; nearest body vert (brute force on subsampled body too)
+            int ps = Math.Max(1, pv.Count / 300), bs = Math.Max(1, bv.Count / 400);
+            double sum = 0; int cnt = 0;
+            for (int i = 0; i < pv.Count; i += ps)
+            {
+                float best = float.MaxValue;
+                for (int j = 0; j < bv.Count; j += bs) { float d = pv[i].DistanceSquaredTo(bv[j]); if (d < best) best = d; }
+                sum += MathF.Sqrt(best); cnt++;
+            }
+            return cnt > 0 ? (float)(sum / cnt) : float.NaN;
+        }
+        catch { return float.NaN; }
+    }
+
+    private static List<Vector3> VertsOf(Node3D root)
+    {
+        var list = new List<Vector3>();
+        void Walk(Node n, Transform3D xf)
+        {
+            if (n is Node3D n3) xf *= n3.Transform;
+            if (n is MeshInstance3D mi && mi.Mesh is { } mesh)
+                for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+                {
+                    var arr = mesh.SurfaceGetArrays(s);
+                    if (arr.Count > 0 && arr[(int)Mesh.ArrayType.Vertex].VariantType != Variant.Type.Nil)
+                        foreach (var v in arr[(int)Mesh.ArrayType.Vertex].AsVector3Array()) list.Add(xf * v);
+                }
+            foreach (var c in n.GetChildren()) Walk(c, xf);
+        }
+        Walk(root, Transform3D.Identity);
+        return list;
+    }
+
+    // Highest + distinct bone indices the built mesh weights vertices to (from its skin Bones array).
+    private static (int maxBone, int distinct) BoneUsage(Node3D root)
+    {
+        int max = -1; var used = new HashSet<int>();
+        void Walk(Node n)
+        {
+            if (n is MeshInstance3D mi && mi.Mesh is { } mesh)
+                for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+                {
+                    var arr = mesh.SurfaceGetArrays(s);
+                    if (arr.Count > (int)Mesh.ArrayType.Bones && arr[(int)Mesh.ArrayType.Bones].VariantType != Variant.Type.Nil)
+                        foreach (var b in arr[(int)Mesh.ArrayType.Bones].AsInt32Array()) { if (b > max) max = b; used.Add(b); }
+                }
+            foreach (var c in n.GetChildren()) Walk(c);
+        }
+        Walk(root);
+        return (max, used.Count);
     }
 
     /// Fallback: the bare meshes (MMB objects, or an equipment garment with wear off), no skeleton.
