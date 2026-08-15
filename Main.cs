@@ -1508,7 +1508,7 @@ public partial class Main : Control
         int nBone = chunks.Count(c => c.Type == 0x29);
         int nSkel = chunks.Count(c => c.Type == 0x2b);
         int nGen = chunks.Count(c => c.Type == 0x05);
-        string kind = nGen > 0 ? "spell effect" : nMesh > 0 || nBone > 0 ? "model"
+        string kind = nMesh > 0 || nBone > 0 ? "model" : nGen > 0 ? "spell effect"
             : nSkel > 0 ? "animation" : nTex > 0 ? "texture set"
             : chunks.Count == 0 ? "data / non-chunked" : "mixed / other";
 
@@ -1616,10 +1616,11 @@ public partial class Main : Control
         // Explicit clip DATs from the Animation tab → always assemble-on-body with them.
         if (_extraClipDats is not null && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
 
-        // A spell/ability EFFECT DAT (0x05 generators) → play its particle effect, IF it renders (some
-        // effect DATs reference external sprites and can't draw; TryShowEffect returns false then, so we
-        // fall through to its animation). Checked before the character branch.
-        if (_lastChunks.Any(c => c.Type == 0x05) && TryShowEffect()) return;
+        // A PURE spell/ability effect DAT (0x05 generators, no own mesh) → play its particle effect. A DAT
+        // that ALSO has a 0x2a mesh (e.g. an elemental staff with a glow) is a weapon/object first — its
+        // mesh is shown below, not the effect. (TryShowEffect returns false for sprite-less casts → falls
+        // through to the animation.)
+        if (!hasMesh && _lastChunks.Any(c => c.Type == 0x05) && TryShowEffect()) return;
 
         // Real geometry model (creature / full NPC) → show it posed.
         if (ownModel)
