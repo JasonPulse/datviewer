@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/JasonPulse/datviewer/compare/v1.5.2...v1.6.0) (2026-08-15)
+
+
+### Features
+
+* auto-detect race/slot of opened equipment, ROM-tree search, drag & drop ([3b634b7](https://github.com/JasonPulse/datviewer/commit/3b634b76de587bb94db689fac234e7e9a25ea178))
+
 ## [1.5.2](https://github.com/JasonPulse/datviewer/compare/v1.5.1...v1.5.2) (2026-08-14)
 
 
