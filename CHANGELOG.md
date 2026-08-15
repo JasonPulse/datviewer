@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/JasonPulse/datviewer/compare/v1.10.0...v1.10.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* weapon/rigid DATs render standalone, never force-worn on a body ([3d6ceb8](https://github.com/JasonPulse/datviewer/commit/3d6ceb8895b9ef4d5dcf4f25b3aa4ecab28c2c0d))
+
 # [1.10.0](https://github.com/JasonPulse/datviewer/compare/v1.9.0...v1.10.0) (2026-08-15)
 
 
