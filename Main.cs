@@ -1130,16 +1130,20 @@ public partial class Main : Control
     private string? SlotFromGeometry()
     {
         if (_lastData is null || _resolver?.Ready != true || _resolver.PcBaseParts(7, 0) is not { } r) return null;
-        Aabb a;
+        Aabb a; int distinctBones;
         try
         {
             var cm = Vellichor.Render.CharacterModel.DecodeAssembled(File.ReadAllBytes(r.skeleton), new[] { _lastData });
             if (cm is null || cm.BoneCount == 0) return null;
             var (root, _, _) = cm.BuildInstance();
             a = WorldAabbOf(root);
+            (_, distinctBones) = BoneUsage(root);
             root.QueueFree();
         }
         catch { return null; }
+        // A worn garment skins across MANY bones of a body region; a weapon / rigid accessory attaches to
+        // one bone. So don't try to slot a rigid mesh — it isn't a wearable body piece.
+        if (distinctBones < 3) return null;
         if (a.Size.Length() < 0.05f) return null;
         float top = a.End.Y, bot = a.Position.Y, cy = a.GetCenter().Y, xw = a.Size.X;
         if (top >= 1.4f && bot >= 1.3f) return "head";   // compact, near the top of the body
@@ -1518,17 +1522,22 @@ public partial class Main : Control
         if (!string.IsNullOrEmpty(rel) && rel != path)
             _info.AppendText($"[color=#7c7]XIPivot: drop your replacement at [b]<overlay>/{rel.Replace('\\','/')}[/b][/color]\n");
 
-        // Equipment part (skinned mesh, no own skeleton) → deduce its race + slot + item and pre-select
-        // the wear controls, so it's dressed correctly without the user knowing what the piece is.
+        // Equipment part (skinned mesh, no own skeleton) → deduce its race + slot + item. Only a body
+        // garment gets auto-worn on a race; a weapon/accessory (main/sub/range) is only identified, never
+        // forced onto a body (it renders standalone in BuildModelView).
         if (nMesh > 0 && nBone == 0 && DeduceEquip(path) is { } eq)
         {
-            if (eq.raceId > 0) for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == eq.raceId) _raceOpt.Selected = i;
-            if (WearSlots.Contains(eq.slot)) for (int i = 0; i < _slotOpt.ItemCount; i++) if (_slotOpt.GetItemText(i) == eq.slot) _slotOpt.Selected = i;
-            _wearChk.ButtonPressed = true;
-            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) + (eq.notice is not null ? " (best fit)" : "") : "?";
+            bool wearable = WearSlots.Contains(eq.slot);
+            if (wearable)
+            {
+                if (eq.raceId > 0) for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == eq.raceId) _raceOpt.Selected = i;
+                for (int i = 0; i < _slotOpt.ItemCount; i++) if (_slotOpt.GetItemText(i) == eq.slot) _slotOpt.Selected = i;
+                _wearChk.ButtonPressed = true;
+                if (eq.notice is not null) ShowNotice(eq.notice); // ambiguous/best-fit → yellow banner
+            }
+            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) + (wearable && eq.notice is not null ? " (best fit)" : "") : "?";
             string what = string.IsNullOrEmpty(eq.item) ? "" : $" · [b]{eq.item}[/b]";
             _info.AppendText($"[color=#e8c877]detected:[/color] {who} · {eq.slot}{what}");
-            if (eq.notice is not null) ShowNotice(eq.notice); // ambiguous/best-fit → yellow banner
             GD.Print($"[detected] {Path.GetFileName(path)} -> race={who} slot={eq.slot} item='{eq.item}'");
         }
 
@@ -1623,12 +1632,42 @@ public partial class Main : Control
         // skeleton+clips effect/cast DAT) → play its clips on the chosen race's body so the motion is seen.
         if (hasClips && _wearChk.ButtonPressed && _resolver?.Ready == true && TryAnimOnBody()) return;
 
-        if (isPart && _wearChk.ButtonPressed && _resolver?.Ready == true && TryWearOnBody()) return;
+        // A mesh part: assemble it once on a reference skeleton to inspect + render (these DATs decode to
+        // 0 verts without a skeleton). A garment skins across MANY bones → wear it on a body when asked;
+        // a weapon / accessory is rigid (≈1 bone) → show the mesh standalone (never forced onto a body).
+        if (isPart && _resolver?.Ready == true && AssembleObject() is { } obj)
+        {
+            bool garment = obj.distinctBones >= 3;
+            if (garment && _wearChk.ButtonPressed && TryWearOnBody()) { obj.root.QueueFree(); return; }
+            _modelRoot.AddChild(obj.root); // weapon / accessory / wear-off garment / wear-failed
+            _modelInfo.Text = (garment ? "  garment mesh (turn on Wear on body to fit it)" : "  weapon / object · standalone mesh")
+                              + "   (drag to orbit · wheel to zoom)";
+            var m = WorldAabbOf(obj.root);
+            FrameCamera(m.Size.Length() > 0.01f ? m : obj.bounds);
+            return;
+        }
 
         // A skeleton with clips but no mesh and no resolver — show the (invisible) skeleton anyway.
         if (!isPart) { ShowCharacter(self!, $"skeleton · {self!.BoneCount} bones (no mesh)"); return; }
 
         ShowRawMeshes();
+    }
+
+    /// Assemble the opened mesh part on a reference (Mithra) skeleton ALONE (no base body) and build it,
+    /// returning the node + bounds + how many distinct bones it weights to (a weapon uses ≈1, a garment
+    /// many). Used both to render a standalone object and to tell garments from weapons.
+    private (Node3D root, Aabb bounds, int distinctBones)? AssembleObject()
+    {
+        if (_lastData is null || _resolver?.Ready != true || _resolver.PcBaseParts(7, 0) is not { } r) return null;
+        try
+        {
+            var cm = Vellichor.Render.CharacterModel.DecodeAssembled(File.ReadAllBytes(r.skeleton), new[] { _lastData });
+            if (cm is null || cm.BoneCount == 0) return null;
+            var (root, _, bounds) = cm.BuildInstance();
+            var (_, distinct) = BoneUsage(root);
+            return (root, bounds, distinct);
+        }
+        catch { return null; }
     }
 
     /// A spell/ability effect DAT → decode (Vellichor.Dat.EffectDecoder) and play its particle effect
