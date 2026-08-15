@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/JasonPulse/datviewer/compare/v1.7.0...v1.8.0) (2026-08-15)
+
+
+### Features
+
+* best-fit race guess for hint-less equipment (try it on each race) ([8ab0081](https://github.com/JasonPulse/datviewer/commit/8ab00815279be12cb3a247e724470290c29c43ce))
+
 # [1.7.0](https://github.com/JasonPulse/datviewer/compare/v1.6.0...v1.7.0) (2026-08-15)
 
 
