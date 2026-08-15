@@ -1,3 +1,10 @@
+## [1.10.2](https://github.com/JasonPulse/datviewer/compare/v1.10.1...v1.10.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* weapon-with-glow DATs show the mesh, not a blank effect ([fceb90d](https://github.com/JasonPulse/datviewer/commit/fceb90d6f4936bb9b7f38eb678cdb2aef13fb7bd))
+
 ## [1.10.1](https://github.com/JasonPulse/datviewer/compare/v1.10.0...v1.10.1) (2026-08-15)
 
 
