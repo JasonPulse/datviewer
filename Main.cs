@@ -1043,12 +1043,39 @@ public partial class Main : Control
                 return (PcRaceId(hit.race), slot, hit.item);
             }
 
-        // fallback: keywords in the filename
+        // fallback 1: keywords in the filename
         string lower = name.ToLowerInvariant();
         int race = RaceFromName(lower);
         string? kslot = SlotFromName(lower);
+        // fallback 2: no name hints (a bare "60.dat") — infer the slot from where the mesh sits on the body.
+        kslot ??= SlotFromGeometry();
         if (kslot is not null) return (race, kslot, "");
         return null;
+    }
+
+    /// Infer a wearable slot from the part's geometry: skin it on a reference (Mithra) skeleton alone
+    /// and classify by where the mesh sits (head high, feet at the ground, body wide at the torso, …).
+    /// Reference extents measured from known parts; a garment with no filename/ROM hint lands here.
+    private string? SlotFromGeometry()
+    {
+        if (_lastData is null || _resolver?.Ready != true || _resolver.PcBaseParts(7, 0) is not { } r) return null;
+        Aabb a;
+        try
+        {
+            var cm = Vellichor.Render.CharacterModel.DecodeAssembled(File.ReadAllBytes(r.skeleton), new[] { _lastData });
+            if (cm is null || cm.BoneCount == 0) return null;
+            var (root, _, _) = cm.BuildInstance();
+            a = WorldAabbOf(root);
+            root.QueueFree();
+        }
+        catch { return null; }
+        if (a.Size.Length() < 0.05f) return null;
+        float top = a.End.Y, bot = a.Position.Y, cy = a.GetCenter().Y, xw = a.Size.X;
+        if (top >= 1.4f && bot >= 1.3f) return "head";   // compact, near the top of the body
+        if (xw >= 0.55f && cy >= 0.9f) return "body";    // wide across the shoulders, torso height
+        if (bot <= 0.35f && top <= 0.75f) return "feet"; // sits at the ground
+        if (cy >= 0.82f && bot >= 0.6f) return "hands";  // arm level, off the ground
+        return "legs";                                   // lower-mid, narrow (incl. long skirts to the floor)
     }
 
     private static int RaceFromName(string s)
