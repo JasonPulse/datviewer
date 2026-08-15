@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/JasonPulse/datviewer/compare/v1.8.0...v1.9.0) (2026-08-15)
+
+
+### Features
+
+* yellow auto-decision notice + searchable Open-file browser ([12c6c87](https://github.com/JasonPulse/datviewer/commit/12c6c874746e83348141f438e1a4137854527476))
+
 # [1.8.0](https://github.com/JasonPulse/datviewer/compare/v1.7.0...v1.8.0) (2026-08-15)
 
 
