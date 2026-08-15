@@ -31,10 +31,11 @@ Two jobs:
    - **Textures** — every IMG (0x20) chunk decoded (DXT1/DXT3/paletted/direct) as thumbnails.
    - **Model** — a posed, textured 3D preview, drag to orbit, wheel to zoom:
      - a self-contained model (creature / full NPC) shows posed;
-     - an **equipment part** (e.g. a body piece) is shown **worn on a base race body** — pick the
-       **Race** (Hume ♂/♀, Elvaan ♂/♀, Tarutaru ♂/♀, Mithra, Galka) and **Slot**, and it assembles the
-       naked body (skeleton + head/hands/legs/feet) with your piece swapped in. Uncheck *Wear on body*
-       to see the bare garment mesh; objects fall back to a raw MMB mesh view.
+     - an **equipment part** (e.g. a body piece) is shown **worn on a base race body**. The viewer
+       **auto-detects the race + slot + item** — from the file's ROM path (retail, or a ROM ref in a
+       mod's filename like `Savant's Bonnet ROM.253.26.DAT`), else from race/slot keywords in the name
+       (`…mithra_body_196.dat`, `Feet.DAT`) — so it dresses correctly without you knowing the piece. You
+       can still override **Race**/**Slot** manually. Uncheck *Wear on body* for the bare garment mesh.
      - **Animation** — models with `0x2b` clips get a transport bar: pick a **clip**, play/pause, toggle
        loop, change speed, and scrub the timeline (frame N/total). A standalone **animation DAT** (clips
        only, no mesh) is applied to the chosen race's body and plays its own clips.
@@ -79,6 +80,9 @@ race/slot, so it renders worn.
   a sibling `corpus/` checkout (dev only) → onboarding.
 - **Open .DAT…** — open any file, including user-made mod DATs (no file id needed). Remembers the
   last folder you browsed (saved to `user://settings.cfg`) and reopens there next time.
+- **Drag & drop** — drag a `.DAT` from Finder/Explorer onto the window to open it.
+- **ROM Tree search** — the ROM Tree tab has a search box: type any part of a ROM path or a file id to
+  find files across the whole install (blank restores the folder tree).
 - **Library** tab — browse models/art by name (PC/NPC/Effect/…); search filters the current list.
 - **Animation** tab — pick a **Race**, then a named **action** (Battle, Emote, Ability, …) and it plays
   on that race's body in the Model tab.

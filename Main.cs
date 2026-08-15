@@ -44,6 +44,7 @@ public partial class Main : Control
     private Tree _tree = null!;
     private Label _rootLabel = null!;
     private LineEdit _idBox = null!;
+    private LineEdit _treeSearch = null!;
 
     // named "Library" browser (AltanaViewer CSV catalog: PC→race→slot→item, NPC→family→creature…)
     private AltanaCatalog? _catalog;
@@ -112,6 +113,9 @@ public partial class Main : Control
 
         BuildUi();
 
+        // Drag a .DAT from Finder/Explorer onto the window to open it.
+        GetWindow().FilesDropped += OnFilesDropped;
+
         // Choose the install root: env override > saved setting > the bundled Vellichor corpus
         // (dev only; absent from a released build). If none is valid, onboard via the Settings page.
         string? def = System.Environment.GetEnvironmentVariable("DATVIEWER_ROOT");
@@ -150,6 +154,9 @@ public partial class Main : Control
 
         if (int.TryParse(System.Environment.GetEnvironmentVariable("DATVIEWER_NAV"), out var navi))
             _navTabs.CurrentTab = navi; // 0 Library, 1 Animation, 2 Music, 3 ROM Tree
+
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_SEARCH") is { } sq)
+            Callable.From(() => { _navTabs.CurrentTab = 3; _treeSearch.Text = sq; SearchTree(sq); }).CallDeferred();
 
         // Headless check of the Library select→resolve→load path (DATVIEWER_LIBTEST=cat/group/slot).
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_LIBTEST") is { } lt)
@@ -260,6 +267,11 @@ public partial class Main : Control
         var goBtn = new Button { Text = "Go" };
         goBtn.Pressed += GoToId;
         idRow.AddChild(goBtn);
+
+        // Search every ROM file by path / id (blank = back to the folder tree).
+        _treeSearch = new LineEdit { PlaceholderText = "search files (path or id)…", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _treeSearch.TextChanged += SearchTree;
+        treeTab.AddChild(_treeSearch);
 
         _tree = new Tree { SizeFlagsVertical = SizeFlags.ExpandFill, HideRoot = true };
         _tree.ItemSelected += OnTreeItemSelected;
@@ -997,6 +1009,69 @@ public partial class Main : Control
         _ => 0,
     };
 
+    // ---- deduce race + slot of an opened equipment DAT --------------------------------------
+
+    private static readonly string[] WearSlots = { "body", "head", "hands", "legs", "feet" };
+
+    /// Work out what an opened equipment DAT is (race, wearable slot, item name) so the viewer can
+    /// dress it correctly without the user knowing the piece. Strategy, best first:
+    ///   1. the file's ROM path (opened from the install, or embedded in the mod's filename like
+    ///      "Savant's Bonnet ROM.253.26.DAT") reverse-looked-up in the PC catalog → race+slot+name;
+    ///   2. race/slot keywords in the filename (e.g. "…mithra_body_196.dat", "Feet.DAT").
+    private (int raceId, string slot, string item)? DeduceEquip(string path)
+    {
+        if (_catalog is null) return null;
+        var idx = _catalog.PcPathIndex();
+
+        // candidate ROM-relative paths: the file's own location, plus any dir/file refs in its name
+        var cands = new List<string>();
+        if (!string.IsNullOrEmpty(_root) && path.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
+            cands.Add(RomRelative(path).Replace('\\', '/'));
+        string name = Path.GetFileNameWithoutExtension(path);
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(name, @"(\d{1,3})[-._/](\d{1,3})(?:[-._/](\d{1,3}))?"))
+        {
+            string tok = m.Groups[3].Success
+                ? $"{m.Groups[1].Value}/{m.Groups[2].Value}/{m.Groups[3].Value}"
+                : $"{m.Groups[1].Value}/{m.Groups[2].Value}";
+            cands.AddRange(AltanaCatalog.ResolveRefPaths(tok));
+        }
+        foreach (var rp in cands)
+            if (idx.TryGetValue(rp, out var hit))
+            {
+                string slot = hit.slot.ToLowerInvariant();
+                return (PcRaceId(hit.race), slot, hit.item);
+            }
+
+        // fallback: keywords in the filename
+        string lower = name.ToLowerInvariant();
+        int race = RaceFromName(lower);
+        string? kslot = SlotFromName(lower);
+        if (kslot is not null) return (race, kslot, "");
+        return null;
+    }
+
+    private static int RaceFromName(string s)
+    {
+        bool f = s.Contains("female") || System.Text.RegularExpressions.Regex.IsMatch(s, @"\b(hume|elv|elvaan|taru|tarutaru)\s*f\b") || s.Contains("humef") || s.Contains("elvaanf") || s.Contains("taruf");
+        if (s.Contains("mithra")) return 7;
+        if (s.Contains("galka")) return 8;
+        if (s.Contains("elvaan") || s.Contains("elv")) return f ? 4 : 3;
+        if (s.Contains("taru")) return f ? 6 : 5;
+        if (s.Contains("hume")) return f ? 2 : 1;
+        return 0;
+    }
+
+    private static string? SlotFromName(string s)
+    {
+        if (s.Contains("body") || s.Contains("torso")) return "body";
+        if (s.Contains("head") || s.Contains("hat") || s.Contains("helm") || s.Contains("bonnet")) return "head";
+        if (s.Contains("hand") || s.Contains("glove") || s.Contains("bracer") || s.Contains("mitt")) return "hands";
+        if (s.Contains("leg") || s.Contains("pant") || s.Contains("trous") || s.Contains("slop")) return "legs";
+        if (s.Contains("feet") || s.Contains("foot") || s.Contains("boot") || s.Contains("shoe") || s.Contains("loafer") || s.Contains("sandal")) return "feet";
+        return null;
+    }
+
     // ---- install root + tree ---------------------------------------------------------------
 
     private void SetRoot(string root)
@@ -1200,6 +1275,36 @@ public partial class Main : Control
             AddFolderItem(rootItem, dir);
     }
 
+    /// Search every mapped ROM file by its ROM-relative path or numeric file id. Blank query restores
+    /// the folder tree. Results are a flat, selectable list (capped) — selecting one loads it.
+    private void SearchTree(string query)
+    {
+        query = query.Trim();
+        if (query.Length == 0) { BuildTree(); return; }
+        bool numeric = int.TryParse(query, out var qid);
+        var hits = _pathToId
+            .Select(kv => (rel: RomRelative(kv.Key).Replace('\\', '/'), path: kv.Key, id: kv.Value))
+            .Where(h => h.rel.Contains(query, StringComparison.OrdinalIgnoreCase)
+                        || (numeric && h.id == qid) || h.id.ToString().Contains(query))
+            .OrderBy(h => h.rel, StringComparer.OrdinalIgnoreCase)
+            .Take(1000).ToList();
+
+        _tree.Clear();
+        var root = _tree.CreateItem();
+        foreach (var h in hits)
+        {
+            var it = _tree.CreateItem(root);
+            it.SetText(0, $"{h.rel}   [id {h.id}]");
+            it.SetMetadata(0, h.path);
+        }
+        if (hits.Count == 0)
+        {
+            var it = _tree.CreateItem(root);
+            it.SetText(0, _pathToId.Count == 0 ? "  (set an install root first)" : "  (no matches)");
+            it.SetSelectable(0, false);
+        }
+    }
+
     private void AddFolderItem(TreeItem parent, string dir)
     {
         var it = _tree.CreateItem(parent);
@@ -1308,7 +1413,20 @@ public partial class Main : Control
             : "file id: [color=#888]—[/color]   ·   ");
         _info.AppendText($"type: [b]{kind}[/b]   ·   chunks: {chunks.Count}   ·   textures: {nTex}   ·   meshes: {nMesh}\n");
         if (!string.IsNullOrEmpty(rel) && rel != path)
-            _info.AppendText($"[color=#7c7]XIPivot: drop your replacement at [b]<overlay>/{rel.Replace('\\','/')}[/b][/color]");
+            _info.AppendText($"[color=#7c7]XIPivot: drop your replacement at [b]<overlay>/{rel.Replace('\\','/')}[/b][/color]\n");
+
+        // Equipment part (skinned mesh, no own skeleton) → deduce its race + slot + item and pre-select
+        // the wear controls, so it's dressed correctly without the user knowing what the piece is.
+        if (nMesh > 0 && nBone == 0 && DeduceEquip(path) is { } eq)
+        {
+            if (eq.raceId > 0) for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == eq.raceId) _raceOpt.Selected = i;
+            if (WearSlots.Contains(eq.slot)) for (int i = 0; i < _slotOpt.ItemCount; i++) if (_slotOpt.GetItemText(i) == eq.slot) _slotOpt.Selected = i;
+            _wearChk.ButtonPressed = true;
+            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) : "?";
+            string what = string.IsNullOrEmpty(eq.item) ? "" : $" · [b]{eq.item}[/b]";
+            _info.AppendText($"[color=#e8c877]detected:[/color] {who} · {eq.slot}{what}");
+            GD.Print($"[detected] {Path.GetFileName(path)} -> race={who} slot={eq.slot} item='{eq.item}'");
+        }
 
         PopulateTextures(data, chunks);
         BuildModelView();
@@ -1805,6 +1923,17 @@ public partial class Main : Control
     }
 
     // ---- dialogs ---------------------------------------------------------------------------
+
+    // Files dropped from the OS file manager — open the first .DAT (or any file).
+    private void OnFilesDropped(string[] files)
+    {
+        string? f = files.FirstOrDefault(p => p.EndsWith(".DAT", StringComparison.OrdinalIgnoreCase))
+                    ?? files.FirstOrDefault();
+        if (f is null || !File.Exists(f)) return;
+        _lastOpenDir = Path.GetDirectoryName(f) ?? _lastOpenDir;
+        SaveSettings();
+        LoadDat(f);
+    }
 
     private void OpenFileDialog()
     {

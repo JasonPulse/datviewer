@@ -149,6 +149,28 @@ public sealed class AltanaCatalog
     public List<LibEntry> EntriesForPcSlot(LibGroup g, string slot) =>
         ParseList(FindFile(g.FolderPath, slot + ".csv") ?? Path.Combine(g.FolderPath, slot + ".csv"));
 
+    // ---- reverse index: ROM path → (race, slot, item) ------------------------------------------
+
+    private Dictionary<string, (string race, string slot, string item)>? _pcIndex;
+
+    /// Maps every PC equipment ROM path (e.g. "ROM/253/26.DAT") to its race + slot + item name, by
+    /// parsing every PC/&lt;race&gt;/&lt;slot&gt;.csv once. Used to identify an opened equipment DAT.
+    public IReadOnlyDictionary<string, (string race, string slot, string item)> PcPathIndex()
+    {
+        if (_pcIndex is not null) return _pcIndex;
+        _pcIndex = new(StringComparer.OrdinalIgnoreCase);
+        var pc = Categories.FirstOrDefault(c => c.Name == "PC");
+        if (pc is null) return _pcIndex;
+        foreach (var g in pc.Groups)
+            foreach (var slot in SlotsFor(g))
+                foreach (var e in EntriesForPcSlot(g, slot))
+                {
+                    if (e.IsHeader) continue;
+                    foreach (var rp in e.RomPaths) _pcIndex.TryAdd(rp, (g.Name, slot, e.Label));
+                }
+        return _pcIndex;
+    }
+
     // ---- CSV parsing ---------------------------------------------------------------------------
 
     /// Parse a list CSV: "ref,label" rows, "@Section" headers, blank lines skipped.
