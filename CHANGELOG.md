@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/JasonPulse/datviewer/compare/v1.6.0...v1.7.0) (2026-08-15)
+
+
+### Features
+
+* infer equipment slot from mesh geometry when the filename gives no hint ([96736b3](https://github.com/JasonPulse/datviewer/commit/96736b352550db64ae404730a3b499e9fbbc077c))
+
 # [1.6.0](https://github.com/JasonPulse/datviewer/compare/v1.5.2...v1.6.0) (2026-08-15)
 
 
