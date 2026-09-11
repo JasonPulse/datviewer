@@ -362,7 +362,7 @@ public partial class Main : Control
         _animRow = animRow;
         animRow.AddChild(new Label { Text = "Anim:" });
         _clipOpt = new OptionButton { CustomMinimumSize = new Vector2(150, 0) };
-        _clipOpt.ItemSelected += _ => { HideNotice(); PlaySelectedClip(resetClock: true); };
+        _clipOpt.ItemSelected += _ => PlaySelectedClip(resetClock: true); // clip change isn't a detection override
         animRow.AddChild(_clipOpt);
         _animPlayBtn = new Button { Text = "❚❚", CustomMinimumSize = new Vector2(40, 0) };
         _animPlayBtn.Pressed += ToggleAnim;
@@ -1215,7 +1215,7 @@ public partial class Main : Control
         5 => "Tarutaru ♂", 6 => "Tarutaru ♀", 7 => "Mithra", 8 => "Galka", _ => "?",
     };
 
-    private void ShowNotice(string msg) { if (_notice is null) return; _notice.Text = "⚠  " + msg; _noticeBar.Visible = true; }
+    private void ShowNotice(string msg) { if (_notice is null) return; _notice.Text = msg; _noticeBar.Visible = true; }
     private void HideNotice() { if (_noticeBar is not null) _noticeBar.Visible = false; }
 
     /// Infer a wearable slot from the part's geometry: skin it on a reference (Mithra) skeleton alone
@@ -1666,11 +1666,12 @@ public partial class Main : Control
                 if (eq.raceId > 0) for (int i = 0; i < _raceOpt.ItemCount; i++) if (_raceOpt.GetItemId(i) == eq.raceId) _raceOpt.Selected = i;
                 for (int i = 0; i < _slotOpt.ItemCount; i++) if (_slotOpt.GetItemText(i) == eq.slot) _slotOpt.Selected = i;
                 _wearChk.ButtonPressed = true;
-                if (eq.notice is not null) ShowNotice(eq.notice); // ambiguous/best-fit → yellow banner
             }
-            string who = eq.raceId > 0 ? _raceOpt.GetItemText(_raceOpt.Selected) + (wearable && eq.notice is not null ? " (best fit)" : "") : "?";
-            string what = string.IsNullOrEmpty(eq.item) ? "" : $" · [b]{eq.item}[/b]";
-            _info.AppendText($"[color=#e8c877]detected:[/color] {who} · {eq.slot}{what}");
+            // Announce the auto-decision in the readable yellow bar: a ⚠ warning when the race is a
+            // best-fit guess, a plain ✓ confirmation when it is certain (from the ROM path or a name keyword).
+            string who = eq.raceId > 0 ? RaceName(eq.raceId) : "unknown race";
+            string what = string.IsNullOrEmpty(eq.item) ? "" : $" · {eq.item}";
+            ShowNotice(eq.notice is not null ? "⚠  " + eq.notice : $"✓  Auto-detected {who} · {eq.slot}{what}");
             GD.Print($"[detected] {Path.GetFileName(path)} -> race={who} slot={eq.slot} item='{eq.item}'");
         }
 
