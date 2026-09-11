@@ -1,3 +1,10 @@
+## [1.10.5](https://github.com/JasonPulse/datviewer/compare/v1.10.4...v1.10.5) (2026-09-11)
+
+
+### Bug Fixes
+
+* show every auto-detection in the readable yellow bar, drop the low-contrast inline text ([8b65dd7](https://github.com/JasonPulse/datviewer/commit/8b65dd77157d23ec594f8ee225bbfd4ae3ad8667))
+
 ## [1.10.4](https://github.com/JasonPulse/datviewer/compare/v1.10.3...v1.10.4) (2026-09-11)
 
 
