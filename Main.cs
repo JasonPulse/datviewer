@@ -1083,19 +1083,35 @@ public partial class Main : Control
         string lower = name.ToLowerInvariant();
         int race = RaceFromName(lower);
         string? kslot = SlotFromName(lower);
-        // fallback 2: no name hints (a bare "60.dat") — infer the slot from where the mesh sits on the body.
+
+        // fallback 2: which bones the mesh weights to identifies the slot (and narrows the race) directly.
+        // This is more reliable than the world-AABB method for a piece authored to a non-Mithra skeleton.
+        var bone = DeduceByBones();
+        kslot ??= bone?.slot;
+        // fallback 3: last resort. Infer the slot from where the mesh sits on a reference body.
         kslot ??= SlotFromGeometry();
         if (kslot is null) return null;
-        // fallback 3: no race hint either — best-fit guess by trying it on every race's body.
+
+        // no race hint in the name: take it from the bone match (best skeletal fit), else the body-hug fit.
         string? notice = null;
         if (race == 0)
         {
-            var (best, plausible) = RaceFitRanked();
-            race = best;
-            if (best != 0)
-                notice = plausible.Count > 1
-                    ? $"Auto-selected {RaceName(best)} · {kslot}. This DAT could be {string.Join(" or ", plausible.Select(RaceName))} (near-identical build) — set the Race if it's wrong."
-                    : $"Auto-selected {RaceName(best)} · {kslot} (best geometric fit) — set the Race if it's wrong.";
+            if (bone is { } bm && bm.slot == kslot && bm.race != 0)
+            {
+                race = bm.plausible.Count > 1 ? PickRaceByFit(bm.plausible) : bm.race;
+                notice = bm.plausible.Count > 1
+                    ? $"Auto-selected {RaceName(race)} · {kslot}. This DAT could be {string.Join(" or ", bm.plausible.Select(RaceName))} (shared skeleton), set the Race if it's wrong."
+                    : $"Auto-selected {RaceName(race)} · {kslot} (best skeletal fit), set the Race if it's wrong.";
+            }
+            else
+            {
+                var (best, plausible) = RaceFitRanked();
+                race = best;
+                if (best != 0)
+                    notice = plausible.Count > 1
+                        ? $"Auto-selected {RaceName(best)} · {kslot}. This DAT could be {string.Join(" or ", plausible.Select(RaceName))} (near-identical build), set the Race if it's wrong."
+                        : $"Auto-selected {RaceName(best)} · {kslot} (best geometric fit), set the Race if it's wrong.";
+            }
         }
         return (race, kslot, "", notice);
     }
@@ -1116,6 +1132,81 @@ public partial class Main : Control
         float best = gaps[0].g;
         var plausible = gaps.Where(x => x.g <= best * 1.10f).Select(x => x.rid).ToList();
         return (gaps[0].rid, plausible);
+    }
+
+    /// Absolute skeleton bone indices a skinned DAT references (union of every 0x2a part's bone table).
+    /// The indices are skeleton-relative but stored in the DAT itself, so they identify which body region
+    /// the piece belongs to (a hands mesh weights the hand bones) independent of any assembly skeleton.
+    private static SortedSet<int> SkinnedBoneTable(byte[] dat)
+    {
+        var bones = new SortedSet<int>();
+        ushort U16(byte[] p, int o) => (ushort)(p[o] | (p[o + 1] << 8));
+        foreach (var c in ChunkReader.Walk(dat))
+        {
+            if (c.Type != 0x2a || c.PayloadLength < 0x40) continue;
+            var p = dat.AsSpan(c.PayloadOffset, c.PayloadLength).ToArray();
+            if ((U16(p, 0x02) & 0x7f) == 1) continue; // cloth part: no bone table
+            int offBoneTbl = (p[0x0C] | (p[0x0D] << 8) | (p[0x0E] << 16) | (p[0x0F] << 24)) * 2;
+            int boneTblSuu = U16(p, 0x10);
+            for (int t = 0; t < boneTblSuu && offBoneTbl + t * 2 + 2 <= p.Length; t++)
+                bones.Add(U16(p, offBoneTbl + t * 2));
+        }
+        return bones;
+    }
+
+    // The bones each race's naked base part weights to, keyed by (race, slot). Built once per install root.
+    private Dictionary<(int race, string slot), SortedSet<int>>? _baseBoneCache;
+    private Dictionary<(int race, string slot), SortedSet<int>> BaseBoneTables()
+    {
+        if (_baseBoneCache is not null) return _baseBoneCache;
+        var d = new Dictionary<(int, string), SortedSet<int>>();
+        if (_resolver?.Ready == true)
+            foreach (int r in new[] { 1, 2, 3, 4, 5, 6, 7, 8 })
+                if (_resolver.PcBaseParts(r, 0) is { } rec)
+                    foreach (var (s, p) in rec.parts)
+                        if (WearSlots.Contains(s))
+                            try { d[(r, s)] = SkinnedBoneTable(File.ReadAllBytes(p)); } catch { }
+        _baseBoneCache = d;
+        return d;
+    }
+
+    /// Identify a part's race + slot by WHICH skeleton bones its mesh weights to, matched (Jaccard overlap)
+    /// against every race's naked base parts. Robust where the AABB method fails: a hands mesh weights the
+    /// hand bones no matter what body it's later worn on. Returns null when no base part matches confidently.
+    private (int race, string slot, List<int> plausible, float score)? DeduceByBones()
+    {
+        if (_lastData is null) return null;
+        var pb = SkinnedBoneTable(_lastData);
+        if (pb.Count == 0) return null;
+        var tables = BaseBoneTables();
+        if (tables.Count == 0) return null;
+        var scores = new List<(int r, string s, float j)>();
+        (int r, string s, float j) best = (0, "", -1f);
+        foreach (var ((r, s), baseb) in tables)
+        {
+            if (baseb.Count == 0) continue;
+            int inter = pb.Count(baseb.Contains);
+            int union = pb.Count + baseb.Count - inter;
+            float j = union > 0 ? (float)inter / union : 0f;
+            scores.Add((r, s, j));
+            if (j > best.j) best = (r, s, j);
+        }
+        if (best.j < 0.30f) return null; // nothing overlaps enough to trust
+        var plausible = scores.Where(x => x.s == best.s && x.j >= best.j * 0.98f).Select(x => x.r).Distinct().ToList();
+        return (best.r, best.s, plausible, best.j);
+    }
+
+    /// Break a tie between races that share a skeleton (e.g. Elvaan ♂/♀) by which naked body the part's
+    /// surface hugs closest. Falls back to the first candidate when no body-hug metric is available.
+    private int PickRaceByFit(List<int> plausible)
+    {
+        int best = plausible[0]; float bestGap = float.PositiveInfinity;
+        foreach (int r in plausible)
+        {
+            float g = RaceFitGap(r);
+            if (!float.IsNaN(g) && g < bestGap) { bestGap = g; best = r; }
+        }
+        return best;
     }
 
     private static string RaceName(int id) => id switch
@@ -1208,6 +1299,7 @@ public partial class Main : Control
         // res://data/models (so it works in an exported build, not just against a sibling checkout).
         try { _resolver = new Vellichor.Render.ModelResolver(_root, ModelsDataDir()); }
         catch (Exception e) { _resolver = null; GD.Print("resolver load failed: " + e.Message); }
+        _baseBoneCache = null; // base parts changed with the root; rebuild the bone-signature index lazily
 
         // Reverse map (path → file id) so a browsed file can show its numeric id.
         _pathToId.Clear();
@@ -1485,9 +1577,11 @@ public partial class Main : Control
             string rel = Path.GetRelativePath(dir, f);
             byte[] data;
             try { data = File.ReadAllBytes(f); } catch { continue; }
-            if (SlotMetrics(data) is not { } m) { GD.Print($"[slotscan] {rel} -> (no mesh)"); continue; }
-            string? slot = ClassifySlot(m.a, m.distinctBones, m.meanY);
-            GD.Print($"[slotscan] Y[{m.a.Position.Y:0.00}..{m.a.End.Y:0.00}] cy={m.a.GetCenter().Y:0.00} meanY={m.meanY:0.00} Xw={m.a.Size.X:0.00} b={m.distinctBones} -> {slot ?? "rigid"} | {rel}");
+            _lastData = data;
+            var bone = DeduceByBones();
+            string bm = bone is { } b ? $"{RaceName(b.race)}/{b.slot} j={b.score:0.00} [{string.Join(",", b.plausible.Select(RaceName))}]" : "(none)";
+            string? aabb = SlotMetrics(data) is { } m ? ClassifySlot(m.a, m.distinctBones, m.meanY) : null;
+            GD.Print($"[slotscan] bone->{bm}  aabb->{aabb ?? "rigid"}  | {rel}");
         }
         GD.Print("[slotscan] done");
         GetTree().Quit();
