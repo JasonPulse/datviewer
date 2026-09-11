@@ -157,6 +157,9 @@ public partial class Main : Control
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_TREETEST") is not null)
             Callable.From(TreeTest).CallDeferred();
 
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_SLOTSCAN") is { } scanDir)
+            Callable.From(() => SlotScan(scanDir)).CallDeferred();
+
         if (System.Environment.GetEnvironmentVariable("DATVIEWER_SETTINGS") is not null)
             Callable.From(() => OpenSettings(firstRun: false)).CallDeferred();
 
@@ -1129,18 +1132,36 @@ public partial class Main : Control
     /// Reference extents measured from known parts; a garment with no filename/ROM hint lands here.
     private string? SlotFromGeometry()
     {
-        if (_lastData is null || _resolver?.Ready != true || _resolver.PcBaseParts(7, 0) is not { } r) return null;
-        Aabb a; int distinctBones;
+        if (_lastData is null) return null;
+        if (SlotMetrics(_lastData) is not { } m) return null;
+        if (System.Environment.GetEnvironmentVariable("DATVIEWER_DBG") is not null)
+            GD.Print($"[slotgeo] Y[{m.a.Position.Y:0.00}..{m.a.End.Y:0.00}] cy={m.a.GetCenter().Y:0.00} meanY={m.meanY:0.00} Xw={m.a.Size.X:0.00} bones={m.distinctBones}");
+        return ClassifySlot(m.a, m.distinctBones, m.meanY);
+    }
+
+    // Assemble the part on the Mithra skeleton and read back the metrics the slot classifier keys on.
+    private (Aabb a, int distinctBones, float meanY)? SlotMetrics(byte[] data)
+    {
+        if (_resolver?.Ready != true || _resolver.PcBaseParts(7, 0) is not { } r) return null;
         try
         {
-            var cm = Vellichor.Render.CharacterModel.DecodeAssembled(File.ReadAllBytes(r.skeleton), new[] { _lastData });
+            var cm = Vellichor.Render.CharacterModel.DecodeAssembled(File.ReadAllBytes(r.skeleton), new[] { data });
             if (cm is null || cm.BoneCount == 0) return null;
             var (root, _, _) = cm.BuildInstance();
-            a = WorldAabbOf(root);
-            (_, distinctBones) = BoneUsage(root);
+            var a = WorldAabbOf(root);
+            var (_, distinctBones) = BoneUsage(root);
+            var vs = VertsOf(root);
+            float meanY = vs.Count > 0 ? vs.Sum(v => v.Y) / vs.Count : 0f; // where the mesh mass sits (boots low, leggings mid)
             root.QueueFree();
+            return (a, distinctBones, meanY);
         }
         catch { return null; }
+    }
+
+    // Map assembled-mesh metrics to a wear slot. meanY (where the mesh mass sits) separates feet from legs:
+    // a boot's mass hugs the ground even when the shaft (top) climbs the shin, so a thigh-high still reads feet.
+    private static string? ClassifySlot(Aabb a, int distinctBones, float meanY)
+    {
         // A worn garment skins across MANY bones of a body region; a weapon / rigid accessory attaches to
         // one bone. So don't try to slot a rigid mesh — it isn't a wearable body piece.
         if (distinctBones < 3) return null;
@@ -1148,7 +1169,7 @@ public partial class Main : Control
         float top = a.End.Y, bot = a.Position.Y, cy = a.GetCenter().Y, xw = a.Size.X;
         if (top >= 1.4f && bot >= 1.3f) return "head";   // compact, near the top of the body
         if (xw >= 0.55f && cy >= 0.9f) return "body";    // wide across the shoulders, torso height
-        if (bot <= 0.35f && top <= 0.75f) return "feet"; // sits at the ground
+        if (bot <= 0.35f && meanY < 0.55f) return "feet";// mass hugs the ground (incl. thigh-high boots)
         if (cy >= 0.82f && bot >= 0.6f) return "hands";  // arm level, off the ground
         return "legs";                                   // lower-mid, narrow (incl. long skirts to the floor)
     }
@@ -1453,6 +1474,24 @@ public partial class Main : Control
     }
 
     private static bool IsDat(string f) => f.EndsWith(".DAT", StringComparison.OrdinalIgnoreCase);
+
+    // Headless slot-classifier sweep (DATVIEWER_SLOTSCAN=<dir>): print metrics + predicted slot for every
+    // DAT under dir, so the classifier can be validated against folders whose names give the true slot.
+    private void SlotScan(string dir)
+    {
+        dir = dir.Replace("~", System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile));
+        foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Where(IsDat).OrderBy(x => x))
+        {
+            string rel = Path.GetRelativePath(dir, f);
+            byte[] data;
+            try { data = File.ReadAllBytes(f); } catch { continue; }
+            if (SlotMetrics(data) is not { } m) { GD.Print($"[slotscan] {rel} -> (no mesh)"); continue; }
+            string? slot = ClassifySlot(m.a, m.distinctBones, m.meanY);
+            GD.Print($"[slotscan] Y[{m.a.Position.Y:0.00}..{m.a.End.Y:0.00}] cy={m.a.GetCenter().Y:0.00} meanY={m.meanY:0.00} Xw={m.a.Size.X:0.00} b={m.distinctBones} -> {slot ?? "rigid"} | {rel}");
+        }
+        GD.Print("[slotscan] done");
+        GetTree().Quit();
+    }
 
     // Headless check of the lazy folder-fill (DATVIEWER_TREETEST): expand ROM, then a subfolder.
     private void TreeTest()
