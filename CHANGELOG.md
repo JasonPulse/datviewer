@@ -1,3 +1,10 @@
+## [1.10.4](https://github.com/JasonPulse/datviewer/compare/v1.10.3...v1.10.4) (2026-09-11)
+
+
+### Bug Fixes
+
+* identify equipment slot and race from bone signature, not AABB on a fixed skeleton ([8f65446](https://github.com/JasonPulse/datviewer/commit/8f65446fdbdbbd2c3547fe6a9d439c28de613849))
+
 ## [1.10.3](https://github.com/JasonPulse/datviewer/compare/v1.10.2...v1.10.3) (2026-09-11)
 
 
