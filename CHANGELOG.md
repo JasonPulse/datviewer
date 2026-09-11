@@ -1,3 +1,10 @@
+## [1.10.3](https://github.com/JasonPulse/datviewer/compare/v1.10.2...v1.10.3) (2026-09-11)
+
+
+### Bug Fixes
+
+* classify thigh-high boots as feet not legs via mesh mass ([15e25ab](https://github.com/JasonPulse/datviewer/commit/15e25ab8fb7c365648ce17cc63ec7b8465b8de91))
+
 ## [1.10.2](https://github.com/JasonPulse/datviewer/compare/v1.10.1...v1.10.2) (2026-08-15)
 
 
